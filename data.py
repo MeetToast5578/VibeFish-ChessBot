@@ -127,8 +127,26 @@ def save_records(records, out):
         to_shard(pool.map(encode_record, records, chunksize=256), f"{out}.npz")
 
 
+def puzzle_fens(path, start, count, exclude):
+    """Middlegame/tactical positions from the Lichess puzzle dump: the game position before the
+    opponent's move, and the puzzle position after it. Benchmark positions are skipped."""
+    import csv
+    lines = lichess_lines(path, start + 1, count // 2)
+    for r in csv.DictReader(itertools.chain(["PuzzleId,FEN,Moves,Rating"], lines)):
+        b = chess.Board(r["FEN"])
+        before = b.fen()
+        b.push_uci(r["Moves"].split()[0])
+        for fen in (before, b.fen()):
+            if " ".join(fen.split()[:4]) not in exclude:
+                yield fen
+
+
 def cmd_sf(a):
-    fens = [json.loads(l)["fen"] for l in lichess_lines(a.src, a.start, a.count)]
+    if "puzzle" in a.src:
+        _init_exclude(a.exclude)
+        fens = list(puzzle_fens(a.src, a.start, a.count, _exclude))
+    else:
+        fens = [json.loads(l)["fen"] for l in lichess_lines(a.src, a.start, a.count)]
     with mp.Pool(a.workers, teacher.init_worker, (a.depth,)) as pool:
         records = pool.map(teacher.grade_fen, fens, chunksize=64)
     save_records(records, a.out)

@@ -2,20 +2,13 @@
 and turned into grades (win prob, mates outside [0, 1]) only at training time."""
 import os
 import random
+import subprocess
 import chess
-import chess.engine
 import numpy as np
 import torch
 
 STOCKFISH = os.environ.get("STOCKFISH", "stockfish")  # path to a Stockfish binary
 MATE = 100_000   # mate in n for side to move -> MATE - n; getting mated in n -> -MATE + n
-
-
-def score_int(s: chess.engine.Score) -> int:
-    m = s.mate()
-    if m is None:
-        return s.score()
-    return MATE - m if m > 0 else -MATE - m
 
 
 def to_grade(s):
@@ -28,17 +21,48 @@ def to_grade(s):
     return np.where(s >= MATE - 1000, win, np.where(s <= -MATE + 1000, loss, wp))
 
 
+class Engine:
+    """Bare-bones UCI pipe. python-chess's analyse() validates every PV move, which costs as much
+    CPU as Stockfish itself here; we only need each line's first move and score."""
+    def __init__(self):
+        self.p = subprocess.Popen([STOCKFISH], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        self.send("uci"); self.wait("uciok")
+        self.send("setoption name Threads value 1\nsetoption name Hash value 16\nisready"); self.wait("readyok")
+
+    def send(self, cmd):
+        self.p.stdin.write(cmd + "\n")
+        self.p.stdin.flush()
+
+    def wait(self, prefix):
+        for line in self.p.stdout:
+            if line.startswith(prefix):
+                return line
+
+
 def open_engine():
-    e = chess.engine.SimpleEngine.popen_uci(STOCKFISH)
-    e.configure({"Threads": 1, "Hash": 16})
-    return e
+    return Engine()
 
 
-def grade(engine, board: chess.Board, depth: int) -> dict[str, int]:
-    """Raw score (side to move's view) after each legal move, keyed by UCI."""
+def grade(engine: Engine, board: chess.Board, depth: int) -> dict[str, int]:
+    """Raw score (side to move's view) after each legal move, keyed by UCI. Sends the move history
+    so Stockfish sees repetitions."""
     n = board.legal_moves.count()
-    infos = engine.analyse(board, chess.engine.Limit(depth=depth), multipv=n)
-    return {info["pv"][0].uci(): score_int(info["score"].relative) for info in infos if "pv" in info}
+    moves = " ".join(m.uci() for m in board.move_stack)
+    engine.send(f"setoption name MultiPV value {n}\nposition fen {board.root().fen()}"
+                + (f" moves {moves}" if moves else "") + f"\ngo depth {depth}")
+    lines = {}
+    for line in engine.p.stdout:
+        if line.startswith("bestmove"):
+            break
+        t = line.split()
+        if "multipv" not in t or "pv" not in t or "bound" in line:
+            continue
+        k = t.index("score")
+        s = int(t[k + 2])
+        if t[k + 1] == "mate":
+            s = MATE - s if s > 0 else -MATE - s
+        lines[t[t.index("multipv") + 1]] = (t[t.index("pv") + 1], s)   # deepest line per multipv wins
+    return dict(lines.values())
 
 
 # --- worker process state ----------------------------------------------------

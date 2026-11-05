@@ -1,0 +1,2 @@
+{"model": "/home/user/v1", "mix": 0.0, "wp_lost": 0.0861, "top1": 0.33, "puzzles": 0.1048, "puz_400": 0.247, "puz_800": 0.167, "puz_1200": 0.173, "puz_1600": 0.08, "puz_2000": 0.04, "puz_2400": 0.02, "puz_2800": 0.007, "matches": []}
+{"model": "/home/user/v1", "mix": 0.0, "matches": [{"opp": "random", "W": 1, "D": 18, "L": 1, "score": 0.5}, {"opp": "1320", "W": 0, "D": 7, "L": 13, "score": 0.175, "perf_elo": 1051}]}
