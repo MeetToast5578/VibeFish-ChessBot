@@ -1,2 +1,5 @@
 torch
 chess
+numpy
+zstandard
+pytest

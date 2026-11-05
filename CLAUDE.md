@@ -1,0 +1,36 @@
+# VibeFish: notes for agents
+
+Searchless chess bot. A small transformer picks moves with **one forward pass**. Do not add
+search (alpha-beta, MCTS, k-ply lookahead) to the play path. That is the point of the project.
+Strength must come from data, features, losses and training.
+
+## Layout
+
+| file | role |
+|---|---|
+| `model.py` | board encoding (`encode`, feature planes), move indexing, `ChessGPT` net, `pick()` |
+| `teacher.py` | Stockfish: grading every legal move, score → grade conversion, game workers |
+| `data.py` | Lichess eval DB parsing, SF grading jobs, DAgger games, encoding to `.npz` shards |
+| `train.py` | trainer over shards (mixed sources, cosine LR), checkpoints |
+| `evaluate.py` | puzzles, held-out wp-lost, matches vs Stockfish `UCI_Elo` |
+| `play.py` | interactive / match play |
+| `tests/` | `python -m pytest -q tests` |
+| `PLAN.md` | roadmap + measurements. Keep it updated as steps finish. |
+
+## Conventions
+
+- Board is always encoded from the **side to move's view** (black positions mirrored). Move index
+  = `from*64 + to` in that frame. Under-promotions fold into the queen promotion.
+- Grades: one float per move, side-to-move view. `wp = sigmoid(0.00368 * cp)`. Mates sit outside
+  [0, 1] (`1 + 0.2/n` win, `-0.2/n` loss) so shorter mates rank higher. Clip to [0, 1] for value/BCE targets.
+- Raw data keeps **scores, not grades** (`teacher.MATE` encoding), so the grade curve can change
+  without regenerating data.
+- Changing `encode()` invalidates encoded shards (`data/*.npz`) and checkpoints. Bump
+  `model.ENCODING_VERSION`.
+
+## Environment
+
+- Python venv at `/home/user/venv` (system pip can't build `chess`). `. /home/user/venv/bin/activate`
+- Stockfish: `export STOCKFISH=/path/to/stockfish` (any modern NNUE build. v2 data used SF 17.1)
+- CPU only. bf16 autocast is *slower* here. Training ~320 pos/s for 0.8M params on 4 cores.
+- Big files (`data/`, Lichess dumps) are gitignored. Only final weights go in `models/`.
