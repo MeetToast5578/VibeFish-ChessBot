@@ -197,9 +197,52 @@ Plan instead:
 
 Needed to size it: the laptop's CPU core count, and which notebook service you'll use.
 
-## Ideas parked (only if time remains)
+## Backlog: getting stronger without search
 
-- Horizontal-flip augmentation for positions without castling rights
-- HL-Gauss / binned value targets instead of BCE
-- Distill a bigger model into the small one
-- Under-promotion support (currently folded into queen)
+The rule: the bot may only look at the **current** position (once, or a handful of times), never
+at positions after a move. Ordered by expected gain per hour of work. Nothing here is started yet.
+
+### Better teachers (the student can't beat its labels)
+
+1. **Endgame tablebases.** Syzygy 3–5-piece tables (~1 GB; python-chess reads them) give
+   exact win/draw/loss and distance for every move in those endgames, better than Stockfish. They also
+   target the unconverted won endgames (part of the 14/120 draws vs random). Cheap.
+2. **Deeper Stockfish labels.** Depth 8 → 12–14 for the highest-value positions (DAgger games,
+   middlegames). Costs ~4–8× CPU per position.
+3. **Big teacher → small student.** A 50–100M-param net trained on the same data labels unlimited
+   positions at GPU speed; the shipped bot learns from it. Removes the Stockfish throughput limit.
+
+### Smarter use of data
+
+4. **Hard-example mining.** Oversample positions where the bot's move loses the most win probability.
+   Most positions it already gets right.
+5. **More all-moves-graded middlegames from real games** (the Lichess eval DB leans to endgames;
+   puzzles rated 2000+ are at ~9%).
+6. **Horizontal-flip augmentation** for positions without castling rights (free extra data).
+7. **More varied self-play starts** (started: `--start-puzzles`), and measure every DAgger round
+   with 120-game matches before keeping it.
+
+### Chess-aware network
+
+8. **Geometry-aware attention.** A learned bias per square pair (same rank/file/diagonal, knight
+   jump), as in Leela Chess Zero's transformer ("smolgen"). Likely the biggest win per parameter.
+9. **Fuller history input.** The last few positions (Leela-style), not only last-move markers.
+10. **Under-promotions** as their own moves (currently folded into the queen promotion).
+
+### Cheap training tricks
+
+11. **EMA of weights.** Ship an average of recent weights; nearly free, usually a little stronger.
+12. **Tuning.** `tau` (target softness), learning rate, run length (held-out loss was still
+    falling at the end of every run so far), HL-Gauss / binned value targets instead of BCE.
+
+### At play time, still no search
+
+13. **Mirror averaging.** For positions without castling rights, average the scores of the board
+    and its left-right mirror: two looks at the same position.
+14. **Small ensembles.** Several nets vote on the current position. Costs speed and size, so only
+    if the gain is large ("small and compact" is a goal).
+
+### Ruled out
+
+- **Opening book.** Not search, but not the network either. It breaks the "network only" rule.
+- Anything that evaluates positions after a candidate move (1-ply lookahead, MCTS, alpha-beta).
