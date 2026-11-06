@@ -69,12 +69,13 @@ def grade(engine: Engine, board: chess.Board, depth: int) -> dict[str, int]:
 _engine = _model = None
 _depth = 8
 _strip = False
+_starts = []   # optional start FENs for self-play games (more varied positions)
 
 
-def init_worker(depth, model_path=None, strip_history=False):
-    global _engine, _model, _depth, _strip
+def init_worker(depth, model_path=None, strip_history=False, starts=()):
+    global _engine, _model, _depth, _strip, _starts
     torch.set_num_threads(1)
-    _depth, _strip = depth, strip_history
+    _depth, _strip, _starts = depth, strip_history, list(starts)
     _engine = open_engine()   # exits by itself when the worker's pipe closes
     if model_path:
         from model import load
@@ -96,15 +97,16 @@ def play_game(seed, max_plies=200):
     Returns records (fen HISTORY plies back, moves since then, scores) and the avg wp the model lost."""
     rng = random.Random(seed)
     torch.manual_seed(seed)
-    board = chess.Board()
+    # half the games from the start position, half from a given position (if any)
+    board = chess.Board(rng.choice(_starts)) if _starts and rng.random() < 0.5 else chess.Board()
     fens, records, lost = [board.fen()], [], []
-    while not board.is_game_over(claim_draw=True) and board.ply() < max_plies:
+    while not board.is_game_over(claim_draw=True) and (n := len(board.move_stack)) < max_plies:
         scores = grade(_engine, board, _depth)
-        start = max(0, board.ply() - HISTORY)
+        start = max(0, n - HISTORY)   # moves played in this game, not board.ply(): games can start mid-game
         records.append((fens[start], [m.uci() for m in board.move_stack[start:]], scores))
-        temp = 1.0 if board.ply() < 10 else (0.3 if rng.random() < 0.25 else 0.0)
+        temp = 1.0 if n < 10 else (0.3 if rng.random() < 0.25 else 0.0)
         from model import without_history   # a model trained only on history-free data plays better without it
-        move = _model.pick(without_history(board) if _strip else board, temperature=temp, mix=1.0)
+        move = _model.pick(without_history(board) if _strip else board, temperature=temp)   # policy only, as shipped
         best = max(scores.values())
         if move.uci() in scores:
             lost.append(float(to_grade(best).clip(0, 1) - to_grade(scores[move.uci()]).clip(0, 1)))
