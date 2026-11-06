@@ -17,6 +17,7 @@ Strength must come from data, features, losses and training.
 | `kaggle_run.py` | runs commands on a Kaggle GPU (or CPU) notebook with datasets attached, downloads outputs |
 | `bench/` | benchmark sets (never trained on) + `results.jsonl` of every evaluation |
 | `tests/` | `python -m pytest -q tests` |
+| `HANDOFF.md` | where the work stopped last and what to do next (read first) |
 | `PLAN.md` | goals, experiment protocol, data/compute inventory, lessons, roadmap. Keep it updated as steps finish. |
 
 ## Conventions
