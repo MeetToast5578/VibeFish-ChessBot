@@ -66,11 +66,13 @@ def encode_record(rec, kmax=96):
 
 
 _exclude = set()
+_kmax = 96
 
 
-def _init_exclude(path):
-    global _exclude
+def _init_exclude(path, kmax=96):
+    global _exclude, _kmax
     _exclude = set(open(path).read().split("\n")) if path else set()
+    _kmax = kmax
 
 
 def _encode_lines(lines):
@@ -79,7 +81,7 @@ def _encode_lines(lines):
         try:
             rec = parse_lichess(line)
             if " ".join(rec[0].split()[:4]) not in _exclude:
-                out.append(encode_record(rec))
+                out.append(encode_record(rec, _kmax))
         except (ValueError, KeyError, AssertionError):
             pass   # odd FEN / illegal PV move in the dump
     return out
@@ -111,7 +113,7 @@ def chunks(it, n):
 
 def cmd_lichess(a):
     shard, buf = 0, []
-    with mp.Pool(a.workers, _init_exclude, (a.exclude,)) as pool:
+    with mp.Pool(a.workers, _init_exclude, (a.exclude, a.kmax)) as pool:
         for enc in pool.imap(_encode_lines, chunks(lichess_lines(a.src, a.start, a.count), 2000)):
             buf += enc
             if len(buf) >= a.shard_size:
@@ -195,6 +197,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("cmd", choices=["lichess", "sf", "dagger", "puzzles"])
     p.add_argument("--exclude", help="file of FENs (first 4 fields) to skip")
+    p.add_argument("--kmax", type=int, default=96, help="lichess: keep at most this many (best) moves per position")
     p.add_argument("--src", default="data/eval_part.zst")
     p.add_argument("--start", type=int, default=EVAL_LINES)
     p.add_argument("--count", type=int, default=1_000_000)

@@ -19,7 +19,7 @@ from data import load_shard
 from teacher import to_grade
 
 p = argparse.ArgumentParser()
-p.add_argument("--mix", required=True, help="comma list of glob:weight")
+p.add_argument("--mix", required=True, help="comma list of glob:weight[:kmax], kmax = max moves kept per position")
 p.add_argument("--heldout", default="data/heldout.npz")
 p.add_argument("--minutes", type=float, default=60)
 p.add_argument("--batch", type=int, default=512)
@@ -34,29 +34,40 @@ p.add_argument("--heads", type=int, default=4)
 p.add_argument("--init", help="start from this model file")
 p.add_argument("--eval-every", type=int, default=500)
 p.add_argument("--threads", type=int, default=4)
+p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+p.add_argument("--compile", action="store_true", help="torch.compile the training forward (needs a working C++ compiler)")
+p.add_argument("--multi-gpu", action="store_true", help="split each batch over all visible GPUs (nn.DataParallel)")
 p.add_argument("--out", required=True)
 args = p.parse_args()
 
 
 class Source:
-    """All shards matching a glob, sampled without replacement (reshuffled each pass)."""
-    def __init__(self, pattern, weight, rng):
-        parts = [load_shard(f) for f in sorted(glob.glob(pattern))]
-        assert parts, f"no shards match {pattern}"
-        k = max(i.shape[1] for _, i, _ in parts)
-        pad = lambda a, v: np.pad(a, ((0, 0), (0, k - a.shape[1])), constant_values=v)
-        self.x = np.concatenate([x for x, _, _ in parts])
-        self.idx = np.concatenate([pad(i, -1) for _, i, _ in parts])
-        self.score = np.concatenate([pad(s, 0) for _, _, s in parts])
-        self.weight, self.rng, self.pos, self.perm = weight, rng, 0, rng.permutation(len(self.x))
+    """All shards matching a glob, sampled without replacement (reshuffled each pass). Shards stay
+    separate (no big concatenate) so peak RAM is just the data (~530 B/position with kmax=8).
+    shortcut: everything is held in RAM; switch to memmapped .npy shards past ~40M positions."""
+    def __init__(self, pattern, weight, rng, kmax=None):
+        # moves are stored best-first, so [:, :kmax] keeps the best ones; copy so the full arrays are freed
+        self.parts = [(x, np.ascontiguousarray(i[:, :kmax]), np.ascontiguousarray(s[:, :kmax]))
+                      for x, i, s in map(load_shard, sorted(glob.glob(pattern)))]
+        assert self.parts, f"no shards match {pattern}"
+        self.ends = np.cumsum([len(x) for x, _, _ in self.parts])
+        self.n = int(self.ends[-1])
+        self.weight, self.rng, self.pos, self.perm = weight, rng, 0, rng.permutation(self.n)
         self.name = pattern
 
     def take(self, n):
-        if self.pos + n > len(self.perm):
-            self.perm, self.pos = self.rng.permutation(len(self.x)), 0
+        """A list of (x, idx, score) pieces, one per shard hit; to_batch pads and joins them."""
+        if self.pos + n > self.n:
+            self.perm, self.pos = self.rng.permutation(self.n), 0
         ids = np.sort(self.perm[self.pos:self.pos + n])
         self.pos += n
-        return self.x[ids], self.idx[ids], self.score[ids]
+        shard = np.searchsorted(self.ends, ids, side="right")
+        out = []
+        for s in np.unique(shard):
+            local = ids[shard == s] - (self.ends[s - 1] if s else 0)
+            x, i, sc = self.parts[s]
+            out.append((x[local], i[local], sc[local]))
+        return out
 
 
 def to_batch(parts):
@@ -80,7 +91,8 @@ def losses(model, batch):
     act = F.binary_cross_entropy_with_logits(action.gather(1, gi), wp, reduction="none")
     act = act.masked_fill(~mask, 0).sum() / mask.sum()
     best = wp.masked_fill(~mask, -1).max(-1).values
-    val = F.binary_cross_entropy(value.clamp(1e-6, 1 - 1e-6), best)
+    v = value.float().clamp(1e-6, 1 - 1e-6)   # hand-written BCE: F.binary_cross_entropy refuses to run under CUDA autocast
+    val = -(best * v.log() + (1 - best) * (1 - v).log()).mean()
     return pol, act, val, (policy, action, value)
 
 
@@ -113,15 +125,19 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     sources = []
     for item in args.mix.split(","):
-        pattern, w = item.rsplit(":", 1)
-        sources.append(Source(pattern, float(w), rng))
-        print(f"{pattern}: {len(sources[-1].x)} positions, weight {w}", flush=True)
+        pattern, w, *kmax = item.split(":")
+        sources.append(Source(pattern, float(w), rng, int(kmax[0]) if kmax else None))
+        print(f"{pattern}: {sources[-1].n} positions, weight {w}", flush=True)
     total_w = sum(s.weight for s in sources)
     counts = [round(args.batch * s.weight / total_w) for s in sources]
     hx, hi, hs = load_shard(args.heldout)
-    held = to_batch([(hx, hi, hs)])
+    dev = torch.device(args.device)
+    # bf16 only with hardware support (Ampere+); T4 reports bf16 "supported" but emulates it ~10x slower
+    amp = torch.bfloat16 if dev.type == "cuda" and torch.cuda.get_device_capability(dev) >= (8, 0) else torch.float16
+    scaler = torch.amp.GradScaler("cuda", enabled=dev.type == "cuda" and amp == torch.float16)
+    held = [t.to(dev) for t in to_batch([(hx, hi, hs)])]
 
-    model = load(args.init).train() if args.init else ChessGPT(args.d, args.layers, args.heads)
+    model = (load(args.init).train() if args.init else ChessGPT(args.d, args.layers, args.heads)).to(dev)
     print(f"params: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M  cfg {model.cfg}", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95))
     log = open(f"{args.out}/log.jsonl", "a")
@@ -129,19 +145,26 @@ def main():
     print(rec, flush=True)
     log.write(json.dumps(rec) + "\n")
 
+    # shares weights with `model`; compile + DataParallel crash together, so multi-GPU wins
+    fast = torch.compile(model) if args.compile and not args.multi_gpu else model
+    if args.multi_gpu and torch.cuda.device_count() > 1:
+        fast = torch.nn.DataParallel(fast)
     t0, step, seen, run = time.time(), 0, 0, np.zeros(3)
     budget = args.minutes * 60
     while (frac := (time.time() - t0) / budget) < 1:
         lr = args.lr * min(1, (step + 1) / args.warmup) * (0.05 + 0.95 * 0.5 * (1 + math.cos(math.pi * frac)))
         for gr in opt.param_groups:
             gr["lr"] = lr
-        batch = to_batch([s.take(n) for s, n in zip(sources, counts) if n])
-        pol, act, val, _ = losses(model, batch)
+        batch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(sources, counts) if n for p in s.take(n)])]
+        with torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda"):   # mixed precision on GPUs only (slower on this CPU)
+            pol, act, val, _ = losses(fast, batch)
         loss = pol + args.w_action * act + args.w_value * val
         opt.zero_grad(set_to_none=True)
-        loss.backward()
+        scaler.scale(loss).backward()
+        scaler.unscale_(opt)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        opt.step()
+        scaler.step(opt)
+        scaler.update()
         step += 1
         seen += len(batch[0])
         run = 0.98 * run + 0.02 * np.array([pol.item(), act.item(), val.item()])
