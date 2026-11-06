@@ -1,248 +1,229 @@
-# VibeFish v2 plan
+# VibeFish plan
 
-Goal: a **small, searchless** chess bot. One forward pass picks the move. No alpha-beta,
-no MCTS, no lookahead at play time. Strength has to come from the network.
+## Goal and rules
 
-## Where v1 stands (baseline)
+A **small, searchless** chess bot.
 
-0.88M-param transformer, 80k Stockfish-11 depth-8 positions, ~1,500 gradient steps.
-Policy-only: draws 18/20 vs a random mover (repetitions), loses 17/20 to SF11 Skill 0.
-Top-1 agreement with Stockfish 25%.
+- **Searchless:** the network looks only at the *current* position (once, or a handful of
+  times, e.g. a mirrored copy) and picks a move. Nothing evaluates positions after a candidate
+  move: no 1-ply lookahead, no MCTS, no alpha-beta.
+- **Network only:** no opening book and no tablebase probing at play time. Books, tablebases and
+  Stockfish may be used to make *training labels*.
+- **Compact:** ≤ 10M parameters and ≤ 20 MB shipped (≤ 5 MB with int8 is the stretch goal).
 
-## Diagnosis: why v1 is weak
+Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 
-| # | problem | where | effect |
-|---|---|---|---|
-| 1 | Input has no history: no repetition count, no 50-move clock, no last move | `encode()` | Stockfish labels repeating moves as draws, the model can't see why. Shuffles. |
-| 2 | All mates map to win prob 1.0 (`mate_score=10000` → sigmoid saturates) | `teacher.grade()` | Mate in 1 and mate in 15 look identical, so it never learns to finish. |
-| 3 | Tiny, shallow data: 80k positions, depth 8, SF 11 | `loop.py` | Noisy labels, massive underfitting. |
-| 4 | Constant LR, no schedule | `loop.py` | Leaves accuracy on the table. |
-| 5 | Features: attack *counts* only | `encode()` | Can't tell a pawn guard from a queen guard, doesn't see pins. |
-
-## Budget (measured on this box: 4 CPU cores, no GPU)
-
-| thing | speed |
+| milestone | target |
 |---|---|
-| train 0.8M transformer (fp32, batch 512) | ~320 positions/s |
-| train 2.7M transformer | ~135 positions/s |
-| bf16 autocast | slower (no AMX), don't use |
-| SF 17.1 grading **all** moves, depth 8 | ~34 positions/s/core |
-| Lichess eval DB download | ~12 MB/s ≈ 150k positions/s |
+| v3 | clearly beat v2 in 120-game matches |
+| v4 | score 50% against SF `UCI_Elo` 2000 (v2: 12%) |
+| long term | approach DeepMind's 9M searchless model (~2000 Elo vs bots, see below) |
 
-So **training compute is the bottleneck**, not data. Lichess data is free and deep (depth 20–50),
-but only grades the top 1–5 moves. Local SF grades every move, which is what teaches blunder
-avoidance, and it is affordable at depth 8.
+## Where we are
 
-## v2 design
+| | v1 | v2 (shipped) | v3 (in progress) |
+|---|---|---|---|
+| params | 0.88M | 2.9M | 6.7M (d=256, 8 layers) |
+| positions seen in training | ~0.4M | ~2M | ~40M (stage 1) + stage 2 |
+| trained on | 2 CPU cores, 1 h | 4 CPU cores, ~4.5 h | Kaggle 2×T4, ~5 h |
+| puzzles (bench, 1,050) | 10.5% | 39.1% | – |
+| held-out win prob lost / move | 0.086 | 0.054 | – |
+| vs random (120 games) | +19 =99 −2 | +106 =14 −0 | – |
+| vs SF 1320 (120 games) | 12% | 52% | – |
+| vs SF 1600 / 2000 | – | 26% / 12% | – |
 
-**Input** (68 tokens, each a sum of per-feature embeddings, board from side-to-move view):
-- per square: piece, my/their attacker count (0–3), my/their *cheapest* attacker (P..K),
-  pinned flag, last-move markers (opponent's last move, my previous move)
-- global tokens: castling rights, en-passant file, halfmove-clock bucket, repetition count
+Performance rating on our scale: v1 ≈ 975, v2 ≈ 1350–1400.
 
-**Heads**
-- policy: `q_from · k_to` bilinear over 64×64 (as v1), trained with soft targets
-  `softmax(grade / tau)` over graded moves
-- action value: second bilinear head, `sigmoid` → per-move win prob, BCE on graded moves
-- position value: win prob, from mean-pooled tokens
+## How we decide (experiment protocol)
 
-**Grades** (one scalar per move, side-to-move view): `wp = sigmoid(0.00368 * cp)` (Lichess curve).
-Mates live *above* 1: mate in n → `1 + 0.2/n`; getting mated in n → `-0.2/n`. Shorter mates
-win the softmax clearly. Value/BCE targets clip grades to [0, 1].
+- **Benchmarks** (`evaluate.py`, all policy only):
+  - `bench/puzzles.csv`: 1,050 Lichess puzzles, 150 per rating band.
+  - `bench/heldout.pkl`: 1,000 positions, every move graded by SF 17.1 at depth 12.
+  - Matches vs SF `UCI_Elo` 1320 / 1600 / 2000 (and random), 120 games each, paired openings.
+  - *New:* ChessBench's 10k test puzzles, so we can compare with the DeepMind paper directly.
+- **Rules:**
+  - Compare candidates at **equal GPU time**.
+  - A change ships only if it wins **120-game matches**. Held-out loss alone never decides
+    (in v2 it looked fine while real games were broken).
+  - Every evaluation is appended to `bench/results.jsonl`.
+  - One change at a time where possible. v2's "round 2 + polish" changed three things at once
+    and we still don't know which one hurt.
 
-**Data**
-- `L`: Lichess eval DB, multi-PV deep evals, top-k moves (millions)
-- `S`: SF 17.1 depth 8, all legal moves, on Lichess FENs (no history)
-- `D`: DAgger, the v2 model plays games, SF grades every move with full history
-  (teaches recovery from its own mistakes, and repetition/50-move behaviour)
+## Compute and data
 
-**Training**: AdamW, warmup + cosine decay, batches mixed from all sources, pre-encoded numpy
-shards so the CPU only does the network.
+**Compute.**
+- Kaggle: 30 GPU-hours/week on 2×T4 (quota resets weekly), sessions up to ~12 h, CPU
+  notebooks don't use the GPU quota. `kaggle_run.py` pushes and collects jobs.
+- This cloud machine: 4 CPU cores, used for Stockfish grading, evaluation and orchestration.
 
-## Measurement (all policy-only, one forward pass per move)
+| measured | speed |
+|---|---|
+| train 2.9M model, 4 CPU cores | ~200 positions/s |
+| train 2.9M model, 1×T4 fp16 | ~3,400 positions/s |
+| train 6.7M model, 1×T4 fp16 / with compile / **2×T4** | 1,900 / 2,250 / **3,580** positions/s |
+| T4 with bf16 | ~3× slower than fp16 (emulated) |
+| Stockfish 17.1, every move graded, depth 8 | ~34 positions/s per core (lean UCI reader) |
+| `encode()` | 0.35 ms/position per core |
+| batch building (CPU side) | ~700k positions/s, never the bottleneck |
 
-1. **Puzzles**: Lichess puzzle DB, fixed 1,050-puzzle sample (150 per rating band). Solved = every
-   solution move matched (any mate-in-1 counts).
-2. **Held-out wp lost**: 1,000 Lichess positions never trained on, every move graded by SF 17.1
-   depth 12. Avg win prob given up vs best move, and top-1.
-3. **Matches**: vs SF 17.1 `UCI_LimitStrength` at several `UCI_Elo` levels, plus random mover.
+**Data we have** (private Kaggle datasets `yunus0901/vibefish-v2-data`, `yunus0901/vibefish-v3-data`):
 
-## Steps
-
-- [x] 0. Environment: venv, SF 17.1 binary, data download, throughput measurements
-- [x] 1. Docs: PLAN.md, CLAUDE.md, requirements
-- [x] 2. v2 code: encoding, model, grading fix, data pipeline, trainer, eval, tests
-- [x] 3. Baseline: v1 on the new benchmarks (below)
-- [x] 4. Data: L = 6M Lichess positions; S_0 = 100k Lichess FENs and S_puz = 119k puzzle positions,
-      all moves graded at depth 8
-- [x] 5. Pilot runs: model size at equal wall-clock (below)
-- [x] 6. Main training run (d=192, 6 layers; stopped by a reboot at ~2400 steps, kept step 2000)
-- [x] 7. DAgger round 1 + 150-min continuation (shipped). Round 2 + polish: worse in games, not shipped
-- [x] 8. Final eval, README, ship `models/vibefish_v2.pt`
-
-## Log
-
-**v1 baseline** (new benchmarks, policy only): puzzles 10.5%, held-out wp lost 0.086 / top-1 33%,
-vs random +1 =18 −1, vs SF 17.1 `UCI_Elo` 1320 +0 =7 −13 (perf ≈ 1050).
-
-**Data notes.** The Lichess eval DB leans to endgames (median 18 pieces, 43% of positions have a
-single graded move), so the all-moves set was topped up with puzzle positions (middlegame tactics).
-python-chess's `analyse()` spent as much CPU as Stockfish (it validates PVs); a bare UCI reader
-doubled grading speed with identical results.
-
-**Pilots** (Lichess data only, 40 min each, 2 threads, run side by side):
-
-| model | params | samples | held-out wp lost | top-1 |
-|---|---|---|---|---|
-| d=128, 6 layers | 1.29M | 254k | 0.0809 | 31.3% |
-| d=192, 6 layers | 2.88M | 148k | 0.0807 | 30.7% |
-
-Tied at 40 min with 42% fewer samples for the bigger net, so it learns more per sample and
-should win over a long run. Picked d=192. Policy-only vs policy+action-value mix: no difference
-yet. Both already beat v1's held-out score after 40 min.
-
-`torch.compile` would add ~15%, but this box's g++ lacks `cc1plus`, so training runs eager.
-
-**Main run, step 2000 (1M samples):** held-out wp lost 0.066, top-1 38%, puzzles 25%, but
-**0–20 vs SF 1320**, worse than v1. Cause: train/play mismatch. Lichess and puzzle positions carry
-no move history, so the last-move markers, 50-move-clock buckets and repetition token were never
-trained. In real games they are always set, and their untrained (random-init) embeddings scramble
-the input. Same checkpoint with history stripped at play time: +3 =4 −13 vs SF 1320 (perf ≈ 1130),
-+9 =1 −0 vs random. Fix: DAgger games (which do carry history) go into the fine-tune, so those
-features get trained. The DAgger games are generated with history stripped, so they show the
-positions the model actually reaches. Lesson: **every input feature needs training data that
-exercises it**. A feature that is constant in training is a landmine at play time.
-
-**Restart.** The machine rebooted at step ~2400 of the main run. Continued from the step-2000
-weights (lr 5e-4 → cosine over 150 min) with D1 (97k DAgger positions, 20%) in the mix.
-After 128k samples, full-history play went from 0–20 to **+6 =2 −12 vs SF 1320** (perf ≈ 1210)
-and +19 =1 −0 vs random. The history features work once they see data.
-
-**CPU contention.** One extra busy process (even at nice 10) halves 4-thread PyTorch training,
-because every op waits for its slowest thread. Never generate data next to a training run.
-Run them one after the other at full width.
-
-**Final (VibeFish v2 = continuation model, policy only, mix 0):** puzzles 39.1%, held-out wp lost
-0.054 / top-1 42%, vs random +106 =14 −0, vs SF 1320 +48 =29 −43 (52%), vs SF 1600 +18 =26 −76,
-vs SF 2000 +3 =22 −95 (120 games each). v1 on the same 120-game tests: random +19 =99 −2,
-SF 1320 +3 =23 −94. Policy-only beat the policy+action-value mix in games (pooled 0.31 vs 0.25 at
-SF 1600) and on puzzles, so play uses the policy head alone.
-
-## VibeFish v3 plan (with a GPU)
-
-Goal: keep the shipped bot small (≤ ~10M params, ≤ 20 MB, one forward pass per move) and gain
-another few hundred Elo. Stretch: score 50% against SF `UCI_Elo` 2000 (v2: 12%).
-
-### What a GPU changes
-
-v2 was limited by **training compute**: ~200 positions/s on 4 CPU cores, 2M positions seen in
-total. A single modern GPU should train the same net one to two orders of magnitude faster
-(estimate; step 0 measures it). Then the bottlenecks move:
-
-| bottleneck | why | plan |
+| set | positions | labels |
 |---|---|---|
-| labelled data | 6M Lichess positions would be used up in minutes | full Lichess eval DB (~290M positions) + DeepMind's ChessBench |
-| Stockfish grading | CPU only, ~34 positions/s/core at depth 8 | grade on every spare CPU core, *not* next to training; later let a big GPU teacher label instead |
-| Python encoding | `encode()` takes 0.35 ms/position, single-threaded | encode once, in parallel, into shards; vectorise with numpy bitboards if it's still too slow |
-| RAM | `train.Source` loads every shard (~480 B/position) | stream shards from disk (memmap) instead |
+| L | 6M | Lichess eval DB, deep evals, top 1–5 moves |
+| L2 | 20M | same, top 8 moves kept |
+| S_0, S_puz | 220k | every move, SF 17.1 depth 8 |
+| S2 (a–h) | ~3.2M | every move, depth 8, puzzle-dump positions (Kaggle CPU + local) |
+| D1, D2 | 154k | self-play (DAgger) with move history, every move, depth 8 |
+| heldout | 1,000 | every move, depth 12 (benchmark, never train) |
 
-### Steps
+**ChessBench** (DeepMind, `google-deepmind/searchless_chess`; data CC0 / CC-BY 4.0):
+- 10M Lichess games, ~530M positions, **15.3 billion** action values: every legal move graded by
+  Stockfish 16 at 50 ms per move.
+- Action-value training data: 2,148 shards, ~1.1 TB in total (~0.5 GB and roughly 250k
+  positions per shard). Stored in `.bag` files (their `bagz.py` reader).
+- Also: state-value and best-move sets (~35 GB each), a test set, 10k test puzzles, and
+  pretrained 9M / 136M / 270M checkpoints (CC-BY 4.0).
 
-0. **GPU smoke test.** `train.py` now picks CUDA automatically and trains in bf16 there
-   (untested on a real GPU so far). Run 10 minutes of the v2 recipe, record positions/s and
-   GPU utilisation. If utilisation is low, the CPU-side batch building is the bottleneck: move
-   `to_grade` / padding to the GPU or use a DataLoader with worker processes.
-1. **Streaming data loader.** memmap shards, sampled shard by shard, so hundreds of millions of
-   positions fit on disk instead of in RAM.
-2. **Data scale-up.**
-   - Encode the whole Lichess eval DB (22.5 GB compressed) with `data.py lichess` on all cores.
-   - Add DeepMind's ChessBench (`google-deepmind/searchless_chess`): positions from real Lichess
-     games with *every* legal move graded by Stockfish. That's exactly our "all moves graded" data
-     at a far larger scale, and it is middlegame-heavy, which fixes our endgame skew. Check the
-     dataset's licence and size first; a slice is enough to start.
-   - Neither source has move history, so the DAgger games remain the only teacher for the
-     history features (lesson from v2).
-3. **Scaling sweep at fixed GPU time** (e.g. 2 h each): d=192/6L (v2, 2.9M), d=256/8L (~6M),
-   d=384/8L (~14M). Pick using puzzles and 120-game matches, not held-out loss alone (v2's
-   held-out loss looked fine while games were broken).
-4. **DAgger at scale.** Several rounds: the current model plays thousands of games, Stockfish
-   grades every position (with history), then fine-tune. Run generation on CPU cores that the
-   training job doesn't use. Try depth 10–12 labels for the late rounds.
-5. **Teacher → student (optional, biggest upside).** Train a large teacher (50–100M params) on
-   the same data, then distil it into the small shipped model. The teacher can label millions of
-   self-play positions per hour on the GPU, which removes the Stockfish bottleneck for the
-   student. The shipped bot stays small and searchless.
-6. **Known weaknesses.** Analyse the 14/120 draws against the random mover; support
-   under-promotions; horizontal-flip augmentation for positions without castling rights.
-7. **Evaluation.** Same `bench/` sets, plus matches at SF 1600 / 2000 / 2400 with 240+ games so
-   differences of ~50 Elo are visible. Optional: run it as a Lichess bot through `play.py --uci`
-   for a human-comparable rating.
+## What we learned (keep these)
 
-### Which GPU
+1. **Labels are everything.** VibeFish can't be stronger than its teacher. v1→v2's +400 Elo
+   came mostly from more and better Stockfish labels.
+2. **Every input feature must be exercised by training data.** Lichess and puzzle positions
+   have no move history, so the history features stayed untrained and real games fell apart
+   (0–20 vs SF 1320) until self-play games trained them.
+3. **Mate distance belongs in the labels.** Grading mate in *n* as `1 + 0.2/n` lets the bot
+   finish games without outside help.
+4. **Self-play (DAgger) is the most valuable data per position**, but each round has to prove
+   itself in matches. Round 2 + polish in v2 made it worse.
+5. **Hand-made features pay off when compute is small** (attack counts, cheapest attacker, pins).
+6. **Never run CPU jobs next to multi-threaded training:** one busy core halves PyTorch speed.
+7. **On T4s use fp16, not bf16**, and use both GPUs. `torch.compile` and multi-GPU crash together.
+8. **Small datasets repeated many times overfit models of ~7M+ params** (we saw the risk; the
+   DeepMind paper confirms it).
 
-The available machine is a laptop with **Intel Iris Xe** integrated graphics. That is not enough
-for this plan: it shares system RAM, PyTorch reaches it only through the separate XPU backend
-(official support for Iris Xe is uncertain), and at best it would be a few times faster than
-the CPU. `--device xpu` can be tried, but it's not worth building on.
+## Reference: DeepMind, "Grandmaster-level chess without search" (arXiv 2402.04494)
 
-Plan instead:
-- **Training on a free cloud NVIDIA GPU**: Kaggle notebooks (weekly GPU quota) or Google Colab
-  (T4). `train.py` picks CUDA automatically: bf16 on Ampere or newer, fp16 + loss scaling on
-  T4/P100.
-- **The laptop's CPU cores for Stockfish grading** (`data.py sf` / `data.py dagger`), copying
-  the shards to the training machine. Grading and training on separate machines also avoids
-  the contention problem from v2.
-- Free notebooks have limited disk and session time, so start with a slice of the data that
-  fits (e.g. the 6M v2 positions plus new DAgger games), and checkpoint often.
+Same idea at ~1,000× our training volume: transformers trained on ChessBench, no search.
 
-Needed to size it: the laptop's CPU core count, and which notebook service you'll use.
+| model | Elo vs bots | puzzles (their 10k) | training |
+|---|---|---|---|
+| **9M** | **~2025** | 88.9% | 10M steps × 4,096 positions (~41B examples), 128 TPUs |
+| 136M | ~2260 | 94.5% | same |
+| 270M | ~2300 (2895 vs humans, blitz) | 95.4% | same |
 
-## Backlog: getting stronger without search
+What we take from it:
+- **Small models can be strong.** 9M params reached ~2000 Elo. Our limit is training volume
+  and label quality, not size.
+- **Depth matters:** accuracy rose with layers up to ~16; 2–4 layers were poor.
+- **Action values win with enough data:** predicting a win probability for *every* move beat
+  imitating the best move once data was plentiful.
+- **Binned value loss (HL-Gauss, 128 bins)** beat log-loss and L2.
+- **Their weak spots are our strengths:** no history in the input (they patch repetitions with
+  a rule) and all mates = 100% (they let Stockfish pick the move when winning). VibeFish solves
+  both inside the network.
+- **Our edge must be efficiency per example:** hand-made features, mate-aware labels,
+  self-play, plus as much ChessBench as the free GPU hours can absorb.
 
-The rule: the bot may only look at the **current** position (once, or a handful of times), never
-at positions after a move. Ordered by expected gain per hour of work. Nothing here is started yet.
+## Roadmap
 
-### Better teachers (the student can't beat its labels)
+### v3: scale up on Kaggle (in progress)
 
-1. **Endgame tablebases.** Syzygy 3–5-piece tables (~1 GB; python-chess reads them) give
-   exact win/draw/loss and distance for every move in those endgames, better than Stockfish. They also
-   target the unconverted won endgames (part of the 14/120 draws vs random). Cheap.
-2. **Deeper Stockfish labels.** Depth 8 → 12–14 for the highest-value positions (DAgger games,
-   middlegames). Costs ~4–8× CPU per position.
-3. **Big teacher → small student.** A 50–100M-param net trained on the same data labels unlimited
-   positions at GPU speed; the shipped bot learns from it. Removes the Stockfish throughput limit.
+- [x] GPU path on Kaggle: fp16 on T4, both GPUs, shard-wise sampling (RAM), multi-dataset jobs
+- [x] Data: +20M Lichess positions (L2), ~3.2M every-move-graded puzzle positions (S2)
+- [ ] Stage 1: 6.7M model, 3 h on 2×T4 (L + L2 + S + D)
+- [ ] Self-play round D3 from the stage-1 model (half the games from real middlegame positions)
+- [ ] Stage 2: fine-tune with S2 + D3
+- [ ] Benchmarks vs v2; ship v3 only if it wins the 120-game matches
 
-### Smarter use of data
+### v3.1: ChessBench, the biggest expected gain
 
-4. **Hard-example mining.** Oversample positions where the bot's move loses the most win probability.
-   Most positions it already gets right.
-5. **More all-moves-graded middlegames from real games** (the Lichess eval DB leans to endgames;
-   puzzles rated 2000+ are at ~9%).
-6. **Horizontal-flip augmentation** for positions without castling rights (free extra data).
-7. **More varied self-play starts** (started: `--start-puzzles`), and measure every DAgger round
-   with 120-game matches before keeping it.
+1. **Converter.** Read one action-value shard, check the record layout (FEN, move, win
+   probability), group records by position, and write our records `(fen, [], {uci: score})`.
+   Win probabilities convert back to the centipawn scale with the inverse Lichess curve.
+   ChessBench maps every mate to 100%, so mate distance is lost. Keep relying on our self-play
+   data (and later tablebases) for finishing games.
+2. **Run it on Kaggle CPU notebooks** (free, with internet). Each converts a block of shards into
+   our `.npz` format as notebook output; training jobs attach those outputs (`--kernel-source`).
+   Disk and output limits decide the block size (~20 GB of output per notebook).
+3. **Size the slice to the GPU budget.** At ~3,600 positions/s, a 6 h run sees ~80M positions.
+   About 50–100 shards (12–25M positions with every move graded) is the useful amount per run.
+4. **Train** v3 recipe + ChessBench at equal GPU time vs v3; also evaluate on ChessBench's 10k puzzles.
 
-### Chess-aware network
+### v3.2: network and loss
 
-8. **Geometry-aware attention.** A learned bias per square pair (same rank/file/diagonal, knight
-   jump), as in Leela Chess Zero's transformer ("smolgen"). Likely the biggest win per parameter.
-9. **Fuller history input.** The last few positions (Leela-style), not only last-move markers.
-10. **Under-promotions** as their own moves (currently folded into the queen promotion).
+5. **Depth sweep at fixed size:** d=256×8 vs d=192×14 vs d=160×20 (~6–7M params each).
+6. **Geometry-aware attention:** a learned bias per square pair and head, optionally
+   content-dependent like Leela's "smolgen". Likely the biggest architectural win per parameter.
+7. **Binned action-value head (HL-Gauss, 128 bins)**, then retest playing by action value instead
+   of policy now that most data grades every move.
+8. **Stronger hand-made features:** static exchange evaluation (does capturing on this square
+   win material?), attackers by piece type, king-zone pressure.
+9. **EMA of weights** (ship the averaged weights).
+10. **Under-promotions** as their own moves.
 
-### Cheap training tricks
+### v3.3: better labels and self-play
 
-11. **EMA of weights.** Ship an average of recent weights; nearly free, usually a little stronger.
-12. **Tuning.** `tau` (target softness), learning rate, run length (held-out loss was still
-    falling at the end of every run so far), HL-Gauss / binned value targets instead of BCE.
+11. **Self-play every version:** varied starts (`--start-puzzles`), deeper labels (depth 12) for
+    self-play positions, one change per round, kept only if matches improve.
+12. **Endgame tablebases (Syzygy 3–5 pieces, ~1 GB)** as exact labels for endgame positions.
+    Fixes unconverted won endgames (part of v2's 14/120 draws against a random mover).
+13. **Hard-example mining:** oversample positions where the bot's move loses the most.
+14. **Horizontal-flip augmentation** for positions without castling rights.
+15. **Analyse the draws against the random mover** (stalemate? repetition? 50-move rule?).
 
-### At play time, still no search
+### v4: distillation and compactness
 
-13. **Mirror averaging.** For positions without castling rights, average the scores of the board
-    and its left-right mirror: two looks at the same position.
-14. **Small ensembles.** Several nets vote on the current position. Costs speed and size, so only
-    if the gain is large ("small and compact" is a goal).
+16. **Teacher → student:** train a bigger teacher (e.g. 50–100M) or use DeepMind's published
+    checkpoints (CC-BY 4.0, JAX; would need a converter and inference cost tests), have it label
+    positions the small model reaches, and train the small model on those labels. Removes the
+    Stockfish CPU bottleneck for self-play.
+17. **int8 quantization** of the shipped model (~4× smaller); ship only if matches don't drop.
+18. **At play time, still no search:** mirror averaging for positions without castling rights;
+    a small ensemble only if the gain justifies the size.
+19. **Lichess bot account** (needs the owner to create it) via `play.py --uci` + lichess-bot, for a
+    real, human-comparable rating.
 
-### Ruled out
+### GPU budget (30 h/week)
 
-- **Opening book.** Not search, but not the network either. It breaks the "network only" rule.
+| use | hours |
+|---|---|
+| main training run per version | 6–10 |
+| fine-tunes after self-play rounds | 2–4 |
+| sweeps (depth, architecture), ~1–2 h each | 4–8 |
+| reserve (crashes, reruns) | ~5 |
+
+CPU work (Stockfish grading, self-play, ChessBench conversion, evaluation) runs on Kaggle CPU
+notebooks and this machine, never on the GPU clock.
+
+## Ruled out
+
+- **Opening book** and **tablebase probing at play time**: not search, but not the network either.
 - Anything that evaluates positions after a candidate move (1-ply lookahead, MCTS, alpha-beta).
+- Training on the benchmark sets (`bench/exclude.txt` keeps puzzle positions out of training data).
+
+## History
+
+**v1 → v2 diagnosis.** v1 had no move history in its input (it shuffled into repetitions),
+squashed every mate to 1.0 (never finished games), trained on 80k depth-8 positions with a
+constant learning rate, and only knew attack counts. v2 fixed each one.
+
+**v2 build (4 CPU cores).**
+- Data: 6M Lichess positions, 220k every-move-graded positions; python-chess's `analyse()` was
+  replaced by a bare UCI reader (2× faster grading).
+- Pilots: at equal time, 2.9M params tied 1.3M params with 42% fewer samples, so we picked the
+  bigger one.
+- Main run: puzzles 25% but 0–20 vs SF 1320 because the history features were untrained;
+  stripping history at play time gave +3 =4 −13 (perf ≈ 1130).
+- The machine rebooted at step ~2400. Continued from step 2000 with self-play data D1 in the
+  mix; after 128k samples: +6 =2 −12 vs SF 1320.
+- Final (shipped): numbers in "Where we are". Policy alone beat policy + action-value mix in
+  games (0.31 vs 0.25 at SF 1600).
+- Self-play round 2 + a 30-min polish: worse in games (perf 1340 vs 1417), not shipped.
+
+**v3 so far (Kaggle).**
+- Smoke tests: T4 reports bf16 "supported" but emulates it; fp16 is ~3× faster. `torch.compile`
+  +17%, two GPUs +86%, both together crash.
+- `train.Source` now samples shard by shard (no full concatenate) so 26M positions fit in 29 GB RAM.
+- L2 (20M positions) encoded on 4 cores in ~35 min; uploads run at ~28 MB/s.
+- Stockfish grading of puzzle positions runs both on a Kaggle CPU notebook and locally.
