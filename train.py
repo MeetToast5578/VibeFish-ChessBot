@@ -19,7 +19,7 @@ from data import load_shard
 from teacher import to_grade
 
 p = argparse.ArgumentParser()
-p.add_argument("--mix", required=True, help="comma list of glob:weight")
+p.add_argument("--mix", required=True, help="comma list of glob:weight[:kmax], kmax = max moves kept per position")
 p.add_argument("--heldout", default="data/heldout.npz")
 p.add_argument("--minutes", type=float, default=60)
 p.add_argument("--batch", type=int, default=512)
@@ -35,6 +35,8 @@ p.add_argument("--init", help="start from this model file")
 p.add_argument("--eval-every", type=int, default=500)
 p.add_argument("--threads", type=int, default=4)
 p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+p.add_argument("--compile", action="store_true", help="torch.compile the training forward (needs a working C++ compiler)")
+p.add_argument("--multi-gpu", action="store_true", help="split each batch over all visible GPUs (nn.DataParallel)")
 p.add_argument("--out", required=True)
 args = p.parse_args()
 
@@ -42,8 +44,8 @@ args = p.parse_args()
 class Source:
     """All shards matching a glob, sampled without replacement (reshuffled each pass).
     shortcut: loads every shard into RAM (~480 B/position), switch to per-shard memmap streaming past ~20M positions."""
-    def __init__(self, pattern, weight, rng):
-        parts = [load_shard(f) for f in sorted(glob.glob(pattern))]
+    def __init__(self, pattern, weight, rng, kmax=None):
+        parts = [(x, i[:, :kmax], s[:, :kmax]) for x, i, s in map(load_shard, sorted(glob.glob(pattern)))]   # moves are sorted best-first
         assert parts, f"no shards match {pattern}"
         k = max(i.shape[1] for _, i, _ in parts)
         pad = lambda a, v: np.pad(a, ((0, 0), (0, k - a.shape[1])), constant_values=v)
@@ -116,14 +118,15 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     sources = []
     for item in args.mix.split(","):
-        pattern, w = item.rsplit(":", 1)
-        sources.append(Source(pattern, float(w), rng))
+        pattern, w, *kmax = item.split(":")
+        sources.append(Source(pattern, float(w), rng, int(kmax[0]) if kmax else None))
         print(f"{pattern}: {len(sources[-1].x)} positions, weight {w}", flush=True)
     total_w = sum(s.weight for s in sources)
     counts = [round(args.batch * s.weight / total_w) for s in sources]
     hx, hi, hs = load_shard(args.heldout)
     dev = torch.device(args.device)
-    amp = torch.bfloat16 if dev.type == "cuda" and torch.cuda.is_bf16_supported() else torch.float16   # T4/P100: no bf16
+    # bf16 only with hardware support (Ampere+); T4 reports bf16 "supported" but emulates it ~10x slower
+    amp = torch.bfloat16 if dev.type == "cuda" and torch.cuda.get_device_capability(dev) >= (8, 0) else torch.float16
     scaler = torch.amp.GradScaler("cuda", enabled=dev.type == "cuda" and amp == torch.float16)
     held = [t.to(dev) for t in to_batch([(hx, hi, hs)])]
 
@@ -135,6 +138,9 @@ def main():
     print(rec, flush=True)
     log.write(json.dumps(rec) + "\n")
 
+    fast = torch.compile(model) if args.compile else model   # shares weights with `model`
+    if args.multi_gpu and torch.cuda.device_count() > 1:
+        fast = torch.nn.DataParallel(fast)
     t0, step, seen, run = time.time(), 0, 0, np.zeros(3)
     budget = args.minutes * 60
     while (frac := (time.time() - t0) / budget) < 1:
@@ -143,7 +149,7 @@ def main():
             gr["lr"] = lr
         batch = [t.to(dev, non_blocking=True) for t in to_batch([s.take(n) for s, n in zip(sources, counts) if n])]
         with torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda"):   # mixed precision on GPUs only (slower on this CPU)
-            pol, act, val, _ = losses(model, batch)
+            pol, act, val, _ = losses(fast, batch)
         loss = pol + args.w_action * act + args.w_value * val
         opt.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
