@@ -25,7 +25,7 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 
 ## Next steps, in order
 
-1. ~~Benchmark the ChessBench run~~ done, not shipped (50% vs v3, 47.5% vs SF 2000; PLAN v3.1). (same as the control, ~5 min locally):
+1. ~~Benchmark the ChessBench run~~ done, not shipped (50% vs v3, 47.5% vs SF 2000; PLAN v3.1). Commands used:
    ```bash
    kaggle kernels output yunus0901/vibefish-v31-cb -p kaggle_out/vibefish-v31-cb --file-pattern '(runs/|\.log$)'
    ```
