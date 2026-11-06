@@ -16,26 +16,27 @@ Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 
 | milestone | target |
 |---|---|
-| v3 | clearly beat v2 in 120-game matches |
-| v4 | score 50% against SF `UCI_Elo` 2000 (v2: 12%) |
+| v3 | clearly beat v2 in 120-game matches (**done**: 92% head-to-head, 49% vs SF 2000) |
+| v4 | score 50% against SF `UCI_Elo` 2000 (v2: 12%, v3: 49%) |
 | long term | approach DeepMind's 9M searchless model (~2000 Elo vs bots, see below) |
 | stretch | beat DeepMind's 270M model head-to-head with ≤ 10M params and free compute (see "Stretch goal") |
 | moonshot | 3000 on our scale, still ≤ 10M params and no search (see "Road to 3000") |
 
 ## Where we are
 
-| | v1 | v2 (shipped) | v3 (in progress) |
+| | v1 | v2 | v3 (shipped) |
 |---|---|---|---|
 | params | 0.88M | 2.9M | 6.7M (d=256, 8 layers) |
-| positions seen in training | ~0.4M | ~2M | ~40M (stage 1) + stage 2 |
-| trained on | 2 CPU cores, 1 h | 4 CPU cores, ~4.5 h | Kaggle 2×T4, ~5 h |
-| puzzles (bench, 1,050) | 10.5% | 39.1% | – |
-| held-out win prob lost / move | 0.086 | 0.054 | – |
-| vs random (120 games) | +19 =99 −2 | +106 =14 −0 | – |
-| vs SF 1320 (120 games) | 12% | 52% | – |
-| vs SF 1600 / 2000 | – | 26% / 12% | – |
+| positions seen in training | ~0.4M | ~2M | ~67M |
+| trained on | 2 CPU cores, 1 h | 4 CPU cores, ~4.5 h | Kaggle 2×T4, 5 h |
+| puzzles (bench, 1,050) | 10.5% | 39.1% | 59.3% |
+| held-out win prob lost / move | 0.086 | 0.054 | 0.028 |
+| vs random (120 games) | +19 =99 −2 | +106 =14 −0 | +118 =2 −0 |
+| vs SF 1320 (120 games) | 12% | 52% | 92% |
+| vs SF 1600 / 2000 | – | 26% / 12% | 73% / 49% |
+| round-robin (100 games/pair) | 18% vs v2, 4.5% vs v3 | 82% vs v1, 8% vs v3 | 95.5% vs v1, 92% vs v2 |
 
-Performance rating on our scale: v1 ≈ 975, v2 ≈ 1350–1400.
+Performance rating on our scale: v1 ≈ 975, v2 ≈ 1350–1650, v3 ≈ 1740–1990 (1991 vs SF 2000).
 
 ## How we decide (experiment protocol)
 
@@ -135,7 +136,7 @@ What we take from it:
 
 ## Roadmap
 
-### v3: scale up on Kaggle (in progress)
+### v3: scale up on Kaggle (done, shipped)
 
 - [x] GPU path on Kaggle: fp16 on T4, both GPUs, shard-wise sampling (RAM), multi-dataset jobs
 - [x] Data: +20M Lichess positions (L2), ~3.2M every-move-graded puzzle positions (S2)
@@ -144,8 +145,16 @@ What we take from it:
       SF 1600 64.6% (perf 1704); SF 2000 40.0% (perf 1930; v2: 11.7%).
 - [x] Self-play D3: 3,000 games from the stage-1 model, ~218k positions; its own moves lose
       0.027 wp on average (v2's D2: 0.036)
-- [ ] Stage 2: fine-tune with S2 + D3
-- [ ] Benchmarks vs v2; ship v3 only if it wins the 120-game matches
+- [x] Stage 2: fine-tune from stage 1, 2 h on 2×T4, 28M positions (S2_e–h 35%, D3 17%, L 15%,
+      L2 20%, S/D1/D2 13%; lr 3e-4). Puzzles 59.3% (+3.3), held-out wp lost 0.028 (worse than
+      stage 1's 0.024: fewer Lichess positions in the mix + the lr restart). Matches: random
+      +118 =2 −0; SF 1320 91.7%; SF 1600 73.3%; SF 2000 48.7% (perf 1991). Better in every
+      match, so **stage 2 shipped as v3** (`models/vibefish_v3.pt`).
+- [x] Round-robin, 100 games per pair: v3–v2 +86 =12 −2, v3–v1 +91 =9 −0, v2–v1 +64 =36 −0.
+- Not used yet: S2_a–d (1.6M positions graded on Kaggle CPU, kernel `vibefish-grade-1`; it
+  finished 3 min after stage 2 launched). Attach it with `--kernel-source` next time.
+- Lesson for the next fine-tune: keep ≥ 50% Lichess positions in the mix and start at a lower
+  lr (≤ 1e-4), so it keeps stage 1's accuracy on ordinary positions.
 
 ### v3.1: ChessBench, the biggest expected gain
 
@@ -265,7 +274,7 @@ New items:
 27. **Replay buffer:** every run mixes in a fixed share of older data and the best older self-play
     rounds, so new data never pushes out old skills.
 
-Rough goals on our scale (estimates; each step must win matches): v3 ~1,850–1,950 · v3.1 ~2,100 ·
+Rough goals on our scale (estimates; each step must win matches): v3 ~1,850–1,950 (actual ~1,740–1,990) · v3.1 ~2,100 ·
 v3.2 ~2,300 · v4 ~2,500 · beyond: 2,600+ is the frontier, 3000 the moonshot.
 
 ### GPU budget (30 h/week)
@@ -314,3 +323,6 @@ constant learning rate, and only knew attack counts. v2 fixed each one.
 - `train.Source` now samples shard by shard (no full concatenate) so 26M positions fit in 29 GB RAM.
 - L2 (20M positions) encoded on 4 cores in ~35 min; uploads run at ~28 MB/s.
 - Stockfish grading of puzzle positions runs both on a Kaggle CPU notebook and locally.
+- Stage 1 (3 h) and stage 2 (2 h) on 2×T4; D3 self-play locally. The machine rebooted twice
+  during D3, so it ran as 500-game chunks (a shell loop that skips finished files).
+- Final: stage 2 beat stage 1 in every match and v2 92% head-to-head (numbers in the v3 roadmap).

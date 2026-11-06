@@ -147,6 +147,7 @@ def match(pool, elo, games, pgn=None, me="VibeFish", opp=None):
         with open(pgn, "a") as f:
             for i, (_, b) in enumerate(res):
                 game = chess.pgn.Game.from_board(b)
+                game.headers["Result"] = b.result(claim_draw=True)   # from_board leaves claimable draws as "*"
                 game.headers["White"], game.headers["Black"] = (me, opp) if i % 2 == 0 else (opp, me)
                 print(game, file=f, end="\n\n")
     return out
@@ -154,7 +155,7 @@ def match(pool, elo, games, pgn=None, me="VibeFish", opp=None):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="models/vibefish_v2.pt")
+    p.add_argument("--model", default="models/vibefish_v3.pt")
     p.add_argument("--v1", help="path to a VibeFish v1 checkout (evaluates v1 instead)")
     p.add_argument("--mix", type=float, default=0.0, help="weight of the action-value head in the move choice")
     p.add_argument("--strip-history", action="store_true", help="hide move history from the model")
