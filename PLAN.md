@@ -76,9 +76,9 @@ shards so the CPU only does the network.
 - [x] 4. Data: L = 6M Lichess positions; S_0 = 100k Lichess FENs and S_puz = 119k puzzle positions,
       all moves graded at depth 8
 - [x] 5. Pilot runs: model size at equal wall-clock (below)
-- [ ] 6. Main training run (d=192, 6 layers, 250 min)
-- [ ] 7. DAgger round(s) + fine-tune
-- [ ] 8. Final eval, README, ship v2 weights
+- [x] 6. Main training run (d=192, 6 layers; stopped by a reboot at ~2400 steps, kept step 2000)
+- [x] 7. DAgger round 1 + 150-min continuation (shipped). Round 2 + polish: worse in games, not shipped
+- [x] 8. Final eval, README, ship `models/vibefish_v2.pt`
 
 ## Log
 
@@ -112,6 +112,29 @@ the input. Same checkpoint with history stripped at play time: +3 =4 −13 vs SF
 features get trained. The DAgger games are generated with history stripped, so they show the
 positions the model actually reaches. Lesson: **every input feature needs training data that
 exercises it**. A feature that is constant in training is a landmine at play time.
+
+**Restart.** The machine rebooted at step ~2400 of the main run. Continued from the step-2000
+weights (lr 5e-4 → cosine over 150 min) with D1 (97k DAgger positions, 20%) in the mix.
+After 128k samples, full-history play went from 0–20 to **+6 =2 −12 vs SF 1320** (perf ≈ 1210)
+and +19 =1 −0 vs random. The history features work once they see data.
+
+**CPU contention.** One extra busy process (even at nice 10) halves 4-thread PyTorch training,
+because every op waits for its slowest thread. Never generate data next to a training run.
+Run them one after the other at full width.
+
+**Final (VibeFish v2 = continuation model, policy only, mix 0):** puzzles 39.1%, held-out wp lost
+0.054 / top-1 42%, vs random +106 =14 −0, vs SF 1320 +48 =29 −43 (52%), vs SF 1600 +18 =26 −76,
+vs SF 2000 +3 =22 −95 (120 games each). v1 on the same 120-game tests: random +19 =99 −2,
+SF 1320 +3 =23 −94. Policy-only beat the policy+action-value mix in games (pooled 0.31 vs 0.25 at
+SF 1600) and on puzzles, so play uses the policy head alone.
+
+## Next (v3 ideas, in order of expected value per CPU hour)
+
+1. More DAgger rounds, run at full width (not next to training): on-policy data was the
+   single most useful source per position.
+2. More middlegame positions with every move graded (puzzle-dump games, not just puzzle positions).
+3. Longer training. Held-out loss was still falling at the end of the run.
+4. Look into the draws against the random mover (stalemates? repetitions?).
 
 ## Ideas parked (only if time remains)
 

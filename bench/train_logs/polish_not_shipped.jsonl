@@ -1,0 +1,5 @@
+{"step": 0, "seen": 0, "pol": 2.4571, "policy_top1": 0.421, "policy_lost": 0.052, "mix_top1": 0.423, "mix_lost": 0.0505, "value_mae": 0.0918}
+{"step": 250, "seen": 127750, "min": 9.2, "lr": 0.000119, "train_pol": 2.2827, "pol": 2.4661, "policy_top1": 0.415, "policy_lost": 0.055, "mix_top1": 0.412, "mix_lost": 0.0536, "value_mae": 0.0921}
+{"step": 500, "seen": 255500, "min": 18.4, "lr": 5.4e-05, "train_pol": 2.2704, "pol": 2.4529, "policy_top1": 0.425, "policy_lost": 0.0515, "mix_top1": 0.424, "mix_lost": 0.0504, "value_mae": 0.0911}
+{"step": 750, "seen": 383250, "min": 27.6, "lr": 1e-05, "train_pol": 2.2459, "pol": 2.4474, "policy_top1": 0.422, "policy_lost": 0.0505, "mix_top1": 0.421, "mix_lost": 0.0508, "value_mae": 0.0925}
+{"step": 818, "seen": 417998, "min": 30.0, "final": true, "pol": 2.4473, "policy_top1": 0.423, "policy_lost": 0.0495, "mix_top1": 0.428, "mix_lost": 0.0488, "value_mae": 0.0928}

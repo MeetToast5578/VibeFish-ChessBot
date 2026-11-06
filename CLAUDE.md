@@ -13,7 +13,8 @@ Strength must come from data, features, losses and training.
 | `data.py` | Lichess eval DB parsing, SF grading jobs, DAgger games, encoding to `.npz` shards |
 | `train.py` | trainer over shards (mixed sources, cosine LR), checkpoints |
 | `evaluate.py` | puzzles, held-out wp-lost, matches vs Stockfish `UCI_Elo` |
-| `play.py` | interactive / match play |
+| `play.py` | terminal play and `--uci` engine mode |
+| `bench/` | benchmark sets (never trained on) + `results.jsonl` of every evaluation |
 | `tests/` | `python -m pytest -q tests` |
 | `PLAN.md` | roadmap + measurements. Keep it updated as steps finish. |
 
@@ -32,5 +33,9 @@ Strength must come from data, features, losses and training.
 
 - Python venv at `/home/user/venv` (system pip can't build `chess`). `. /home/user/venv/bin/activate`
 - Stockfish: `export STOCKFISH=/path/to/stockfish` (any modern NNUE build. v2 data used SF 17.1)
-- CPU only. bf16 autocast is *slower* here. Training ~320 pos/s for 0.8M params on 4 cores.
+- CPU only. bf16 autocast is *slower* here, and torch.compile needs a working g++ (cc1plus).
+  Training ~320 pos/s for 0.8M params, ~130–220 pos/s for the 2.9M v2 model on 4 cores.
+- Never run Stockfish/data jobs next to a training run: one busy core halves 4-thread PyTorch.
+- Every input feature must be exercised by training data. Lichess/puzzle positions have no move
+  history, so history features are only learned from DAgger games (see PLAN.md log).
 - Big files (`data/`, Lichess dumps) are gitignored. Only final weights go in `models/`.

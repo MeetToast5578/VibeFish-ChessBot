@@ -1,0 +1,17 @@
+{"step": 0, "seen": 0, "pol": 2.6756, "policy_top1": 0.376, "policy_lost": 0.0696, "mix_top1": 0.384, "mix_lost": 0.0658, "value_mae": 0.1053}
+{"step": 250, "seen": 127750, "min": 9.8, "lr": 0.000495, "train_pol": 2.5075, "pol": 2.601, "policy_top1": 0.385, "policy_lost": 0.0641, "mix_top1": 0.387, "mix_lost": 0.0621, "value_mae": 0.1047}
+{"step": 500, "seen": 255500, "min": 19.9, "lr": 0.00048, "train_pol": 2.4827, "pol": 2.6162, "policy_top1": 0.391, "policy_lost": 0.0609, "mix_top1": 0.391, "mix_lost": 0.0603, "value_mae": 0.1039}
+{"step": 750, "seen": 383250, "min": 28.6, "lr": 0.000459, "train_pol": 2.4483, "pol": 2.5884, "policy_top1": 0.385, "policy_lost": 0.064, "mix_top1": 0.388, "mix_lost": 0.0618, "value_mae": 0.1011}
+{"step": 1000, "seen": 511000, "min": 46.4, "lr": 0.000397, "train_pol": 2.4227, "pol": 2.5724, "policy_top1": 0.381, "policy_lost": 0.0636, "mix_top1": 0.384, "mix_lost": 0.0606, "value_mae": 0.0983}
+{"step": 1250, "seen": 638750, "min": 58.7, "lr": 0.000342, "train_pol": 2.3869, "pol": 2.5387, "policy_top1": 0.416, "policy_lost": 0.0558, "mix_top1": 0.414, "mix_lost": 0.0554, "value_mae": 0.1071}
+{"step": 1500, "seen": 766500, "min": 67.4, "lr": 0.0003, "train_pol": 2.3671, "pol": 2.5458, "policy_top1": 0.406, "policy_lost": 0.0571, "mix_top1": 0.402, "mix_lost": 0.0579, "value_mae": 0.1053}
+{"step": 1750, "seen": 894250, "min": 76.3, "lr": 0.000256, "train_pol": 2.3358, "pol": 2.5327, "policy_top1": 0.41, "policy_lost": 0.0554, "mix_top1": 0.415, "mix_lost": 0.0539, "value_mae": 0.0958}
+{"step": 2000, "seen": 1022000, "min": 85.0, "lr": 0.000213, "train_pol": 2.3221, "pol": 2.5131, "policy_top1": 0.406, "policy_lost": 0.0552, "mix_top1": 0.407, "mix_lost": 0.0537, "value_mae": 0.0943}
+{"step": 2250, "seen": 1149750, "min": 93.6, "lr": 0.000172, "train_pol": 2.3023, "pol": 2.494, "policy_top1": 0.415, "policy_lost": 0.0534, "mix_top1": 0.417, "mix_lost": 0.0528, "value_mae": 0.0958}
+{"step": 2500, "seen": 1277500, "min": 102.1, "lr": 0.000135, "train_pol": 2.2921, "pol": 2.4824, "policy_top1": 0.423, "policy_lost": 0.0537, "mix_top1": 0.424, "mix_lost": 0.053, "value_mae": 0.0937}
+{"step": 2750, "seen": 1405250, "min": 110.4, "lr": 0.000102, "train_pol": 2.2783, "pol": 2.4766, "policy_top1": 0.413, "policy_lost": 0.0534, "mix_top1": 0.414, "mix_lost": 0.0515, "value_mae": 0.0943}
+{"step": 3000, "seen": 1533000, "min": 119.0, "lr": 7.3e-05, "train_pol": 2.2682, "pol": 2.4671, "policy_top1": 0.42, "policy_lost": 0.0507, "mix_top1": 0.425, "mix_lost": 0.0506, "value_mae": 0.0933}
+{"step": 3250, "seen": 1660750, "min": 127.6, "lr": 5.1e-05, "train_pol": 2.2604, "pol": 2.4697, "policy_top1": 0.414, "policy_lost": 0.0529, "mix_top1": 0.417, "mix_lost": 0.0523, "value_mae": 0.0937}
+{"step": 3500, "seen": 1788500, "min": 136.2, "lr": 3.5e-05, "train_pol": 2.2508, "pol": 2.458, "policy_top1": 0.423, "policy_lost": 0.0508, "mix_top1": 0.425, "mix_lost": 0.0498, "value_mae": 0.0937}
+{"step": 3750, "seen": 1916250, "min": 144.6, "lr": 2.7e-05, "train_pol": 2.2515, "pol": 2.4569, "policy_top1": 0.412, "policy_lost": 0.0535, "mix_top1": 0.418, "mix_lost": 0.0513, "value_mae": 0.0925}
+{"step": 3905, "seen": 1995455, "min": 150.0, "final": true, "pol": 2.4571, "policy_top1": 0.422, "policy_lost": 0.052, "mix_top1": 0.423, "mix_lost": 0.0505, "value_mae": 0.0918}
