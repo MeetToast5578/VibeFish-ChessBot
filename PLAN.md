@@ -158,6 +158,22 @@ What we take from it:
 
 ### v3.1: ChessBench, the biggest expected gain
 
+**Status (in progress).** Finding: the action-value shards are shuffled across all 2,148 files
+(100k records of shard 0 share only 8 positions), so a few shards can't give positions with every
+move graded. Getting those would need one pass over all 1.1 TB. The behavioral-cloning file is used
+instead: 527M positions, each with Stockfish 16's best move (50 ms/move).
+- [x] `data.py chessbench`: range-reads any slice of the 36 GB file (no full download) and writes
+      records with an UNKNOWN score: a one-hot policy target, skipped by the value and
+      action-value losses. Benchmark puzzle positions and held-out positions
+      (`bench/heldout_fens.txt`) are excluded. ~4k positions/s on 4 cores, ~480 B/position.
+- [ ] Kaggle CPU notebooks `vibefish-cb-1` / `-2`: positions 0–20M and 20–40M.
+- [ ] Equal-GPU-time test, both from v3, 4 h, lr 2e-4, same data otherwise: `vibefish-v31-control`
+      (L 25%, L2_00–09 35%, S2_a–h 20%, D3 12%, S/D1/D2 8%) vs `vibefish-v31-cb` (CB1 35%,
+      L 10%, L2_00–09 15%, rest the same). L2 is halved in both so CB fits in the 29 GB of RAM.
+- [ ] Matches vs v3 (head-to-head and SF 2000); ship the winner if it beats v3.
+
+Original plan:
+
 1. **Converter.** Read one action-value shard, check the record layout (FEN, move, win
    probability), group records by position, and write our records `(fen, [], {uci: score})`.
    Win probabilities convert back to the centipawn scale with the inverse Lichess curve.
