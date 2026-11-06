@@ -1,7 +1,7 @@
 """Benchmarks for a searchless bot (one forward pass per move).
 
   python evaluate.py --model models/vibefish_v2.pt --puzzles --heldout --match 1320,1600 --games 40
-  python evaluate.py --v1 /path/to/v1/checkout ...      # VibeFish v1 (policy only), for comparison
+  python evaluate.py --v1 models/v1 ...                 # VibeFish v1 (its own model.py + weights)
   python evaluate.py --model models/vibefish_v3.pt --vs models/vibefish_v2.pt --games 100   # head-to-head
 
 puzzles  bench/puzzles.csv: 1,050 Lichess puzzles (7 rating bands). Solved = every move matched
@@ -10,7 +10,7 @@ heldout  bench/heldout.pkl: 1,000 Lichess positions, every legal move graded by 
          wp_lost = win prob given up vs the best move, top1 = picked a best move.
 match    vs Stockfish with UCI_LimitStrength at the given UCI_Elo levels (0.1 s/move), colours
          alternate on the same random opening. "random" plays a random mover.
-vs       head-to-head against another model (--vs path, or v1:<checkout> for VibeFish v1).
+vs       head-to-head against another model (--vs path, or v1:models/v1 for VibeFish v1).
 """
 import argparse
 import csv
@@ -44,7 +44,8 @@ def make_pick(spec):
         v1 = importlib.util.module_from_spec(mspec)
         mspec.loader.exec_module(v1)
         net = v1.ChessGPT()
-        net.load_state_dict(torch.load(os.path.join(path, "run/model.pt")))
+        weights = os.path.join(path, "model.pt")   # models/v1; an old v1 checkout keeps it in run/
+        net.load_state_dict(torch.load(weights if os.path.exists(weights) else os.path.join(path, "run/model.pt")))
         net.eval()
         return lambda b: net.pick(b)
     from model import load, without_history
@@ -53,7 +54,7 @@ def make_pick(spec):
 
 
 def spec_of(arg):
-    """'v1:<checkout>' -> v1 spec, anything else -> a model path (policy only)."""
+    """'v1:<dir>' (e.g. v1:models/v1) -> v1 spec, anything else -> a model path (policy only)."""
     return ("v1", arg[3:], None, False) if arg.startswith("v1:") else ("v2", arg, 0.0, False)
 
 
@@ -156,13 +157,13 @@ def match(pool, elo, games, pgn=None, me="VibeFish", opp=None):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--model", default="models/vibefish_v3.pt")
-    p.add_argument("--v1", help="path to a VibeFish v1 checkout (evaluates v1 instead)")
+    p.add_argument("--v1", help="VibeFish v1 dir, e.g. models/v1 (evaluates v1 instead)")
     p.add_argument("--mix", type=float, default=0.0, help="weight of the action-value head in the move choice")
     p.add_argument("--strip-history", action="store_true", help="hide move history from the model")
     p.add_argument("--puzzles", action="store_true")
     p.add_argument("--heldout", action="store_true")
     p.add_argument("--match", default="", help="comma list of UCI_Elo levels and/or 'random'")
-    p.add_argument("--vs", help="also play a head-to-head match vs this model (path, or v1:<checkout>)")
+    p.add_argument("--vs", help="also play a head-to-head match vs this model (path, or v1:models/v1)")
     p.add_argument("--games", type=int, default=40)
     p.add_argument("--pgn")
     p.add_argument("--workers", type=int, default=os.cpu_count())
