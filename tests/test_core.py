@@ -79,7 +79,7 @@ def test_head_to_head_game_uses_both_players():
             return random.choice(list(b.legal_moves))
         return pick
     evaluate._pick, evaluate._opp = player("me"), player("opp")
-    pts, board = evaluate._game(("vs", 1))
+    pts, board = evaluate._game(("vs", 1, 0.1))
     assert pts in (0.0, 0.5, 1.0)
     assert board.is_game_over(claim_draw=True) or board.ply() >= 400
     assert seen["me"] > 0 and seen["opp"] > 0

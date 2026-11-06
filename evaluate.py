@@ -8,7 +8,7 @@ puzzles  bench/puzzles.csv: 1,050 Lichess puzzles (7 rating bands). Solved = eve
          (any checkmating move also counts).
 heldout  bench/heldout.pkl: 1,000 Lichess positions, every legal move graded by SF 17.1 depth 12.
          wp_lost = win prob given up vs the best move, top1 = picked a best move.
-match    vs Stockfish with UCI_LimitStrength at the given UCI_Elo levels (0.1 s/move), colours
+match    vs Stockfish with UCI_LimitStrength at the given UCI_Elo levels (--movetime, 0.1 s/move), colours
          alternate on the same random opening. "random" plays a random mover.
 vs       head-to-head against another model (--vs path, or v1:models/v1 for VibeFish v1).
 """
@@ -106,7 +106,7 @@ def heldout(pool, path="bench/heldout.pkl"):
 
 
 def _game(args):
-    elo, g = args
+    elo, g, movetime = args
     rng = random.Random(g // 2)
     board = chess.Board()
     for _ in range(4):   # same 4 random opening plies for both games of a pair
@@ -121,7 +121,7 @@ def _game(args):
             if (board.turn == chess.WHITE) == bot_white:
                 move = _pick(board)
             elif engine:
-                move = engine.play(board, chess.engine.Limit(time=0.1)).move
+                move = engine.play(board, chess.engine.Limit(time=movetime)).move
             elif elo == "vs":
                 move = _opp(board)
             else:
@@ -135,12 +135,12 @@ def _game(args):
     return (pts if bot_white else 1 - pts), board
 
 
-def match(pool, elo, games, pgn=None, me="VibeFish", opp=None):
-    res = pool.map(_game, [(elo, g) for g in range(games)], chunksize=1)
+def match(pool, elo, games, pgn=None, me="VibeFish", opp=None, movetime=0.1):
+    res = pool.map(_game, [(elo, g, movetime) for g in range(games)], chunksize=1)
     pts = [r[0] for r in res]
     s = float(np.mean(pts))
     opp = opp or f"opp {elo}"
-    out = {"opp": opp if elo == "vs" else elo, "W": pts.count(1.0), "D": pts.count(0.5), "L": pts.count(0.0), "score": round(s, 3)}
+    out = {"opp": opp if elo == "vs" else elo, "movetime": movetime, "W": pts.count(1.0), "D": pts.count(0.5), "L": pts.count(0.0), "score": round(s, 3)}
     if elo not in ("random", "vs"):
         sc = min(max(s, 0.5 / games), 1 - 0.5 / games)   # avoid infinities on 0% / 100%
         out["perf_elo"] = round(int(elo) + 400 * math.log10(sc / (1 - sc)))
@@ -165,6 +165,7 @@ if __name__ == "__main__":
     p.add_argument("--match", default="", help="comma list of UCI_Elo levels and/or 'random'")
     p.add_argument("--vs", help="also play a head-to-head match vs this model (path, or v1:models/v1)")
     p.add_argument("--games", type=int, default=40)
+    p.add_argument("--movetime", type=float, default=0.1, help="Stockfish seconds per move")
     p.add_argument("--pgn")
     p.add_argument("--workers", type=int, default=os.cpu_count())
     p.add_argument("--log", help="append results as JSON here")
@@ -177,7 +178,7 @@ if __name__ == "__main__":
             out.update(heldout(pool)); print(out, flush=True)
         if a.puzzles:
             out.update(puzzles(pool)); print(out, flush=True)
-        out["matches"] = [match(pool, e, a.games, a.pgn, a.v1 or a.model, a.vs if e == "vs" else None) for e in opps]
+        out["matches"] = [match(pool, e, a.games, a.pgn, a.v1 or a.model, a.vs if e == "vs" else None, a.movetime) for e in opps]
     print(json.dumps(out))
     if a.log:
         with open(a.log, "a") as f:
