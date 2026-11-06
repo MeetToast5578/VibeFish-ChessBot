@@ -12,3 +12,5 @@
 {"model": "models/candidate_polish.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "1600", "W": 18, "D": 8, "L": 94, "score": 0.183, "perf_elo": 1340}]}
 {"model": "models/vibefish_v2.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "random", "W": 106, "D": 14, "L": 0, "score": 0.942}, {"opp": "1320", "W": 48, "D": 29, "L": 43, "score": 0.521, "perf_elo": 1334}, {"opp": "2000", "W": 3, "D": 22, "L": 95, "score": 0.117, "perf_elo": 1648}]}
 {"model": "/home/user/v1", "mix": 0.0, "strip_history": false, "matches": [{"opp": "random", "W": 19, "D": 99, "L": 2, "score": 0.571}, {"opp": "1320", "W": 3, "D": 23, "L": 94, "score": 0.121, "perf_elo": 975}]}
+{"model": "kaggle_out/vibefish-v3-stage1/runs/v3_stage1/model.pt", "mix": 0.0, "strip_history": false, "wp_lost": 0.0244, "top1": 0.545, "puzzles": 0.56, "puz_400": 0.98, "puz_800": 0.927, "puz_1200": 0.84, "puz_1600": 0.593, "puz_2000": 0.387, "puz_2400": 0.173, "puz_2800": 0.02, "matches": []}
+{"model": "kaggle_out/vibefish-v3-stage1/runs/v3_stage1/model.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "1600", "W": 24, "D": 7, "L": 9, "score": 0.688, "perf_elo": 1737}]}
