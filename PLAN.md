@@ -20,6 +20,7 @@ Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 | v4 | score 50% against SF `UCI_Elo` 2000 (v2: 12%) |
 | long term | approach DeepMind's 9M searchless model (~2000 Elo vs bots, see below) |
 | stretch | beat DeepMind's 270M model head-to-head with ≤ 10M params and free compute (see "Stretch goal") |
+| moonshot | 3000 on our scale, still ≤ 10M params and no search (see "Road to 3000") |
 
 ## Where we are
 
@@ -160,7 +161,9 @@ What we take from it:
    About 50–100 shards (12–25M positions with every move graded) is the useful amount per run.
 4. **Keep grading our own positions too** (Kaggle CPU notebooks, ~5–6M positions per 12 h,
    as `vibefish-grade-1` does): self-play and puzzle positions with mate distance, which
-   ChessBench lacks.
+   ChessBench lacks. Kaggle hides a running notebook's log and outputs, so grading jobs must
+   be short (≤ 3–4 h) or split into separate notebooks; `vibefish-grade-1` ran 6 h+ with no way
+   to tell progress from a hang.
 5. **Train** the v3 recipe + ChessBench at equal GPU time vs v3; also evaluate on ChessBench's
    10k puzzles. If it ships, add the README credit line.
 
@@ -190,7 +193,8 @@ What we take from it:
 
 16. **Teacher → student (our own teacher only):** train a bigger VibeFish teacher (e.g. 50–100M)
     on Stockfish labels, have it label positions the small model reaches, and train the small
-    model on those labels. Only worth it if Stockfish CPU time becomes the self-play bottleneck.
+    model on those labels. Two reasons: it removes the Stockfish CPU bottleneck for self-play,
+    and a network's outputs are easier for a small network to copy than search results.
     Never DeepMind's models as a teacher (see "Ruled out").
 17. **int8 quantization** of the shipped model (~4× smaller); ship only if matches don't drop.
 18. **At play time, still no search:** mirror averaging for positions without castling rights;
@@ -219,8 +223,50 @@ Their recipe is huge data with a generic model and generic training. Ours has to
 23. **Deeper pass by reusing layers (recurrent depth).** Run the same block 2–4 times on the
     current position: more computation per move, no extra parameters, still no search.
     Also test whether running more loops at play time than in training helps.
+
 Stages: v3 → ~1,700–1,900 (estimate); v3.1–v3.2 + items 21–22 → aim at their 9M (~2025);
 v4 + item 23 and more self-play → head-to-head vs their 136M, then 270M.
+
+### Road to 3000 (≤ 10M params, no search)
+
+**Honest ceiling.** No searchless model is known to be at 3000. DeepMind's 270M (27× our cap)
+reached ~2895 against humans in Lichess blitz; their 9M ~2025 against bots. 3000 at ≤ 10M would
+be a breakthrough, so this is the moonshot; the realistic path is the low-to-mid 2000s first.
+The size cap is on the **shipped** model; a bigger VibeFish teacher used only in training is fine.
+
+Levers, biggest first (item numbers refer to the lists above):
+
+| # | lever | why it helps a small model |
+|---|---|---|
+| 1 | **Training volume:** ChessBench (v3.1) + our own grading, 1B+ examples | their 9M saw ~41B, v3 ~40M. Free GPUs process ~390M positions/week |
+| 2 | **Training throughput** (new item 24) | profiling, bigger batches, DDP, shorter inputs: aim for 2× positions/s, i.e. 2× data per GPU hour |
+| 3 | **Reusing layers** (item 23) | a 10M model looped 3–4× has the compute of a 30–40M one, no extra params |
+| 4 | **Chess-shaped attention** (item 6) + depth sweep (item 5) | Leela's smolgen gave large gains per parameter |
+| 5 | **Lookahead targets** (item 21) | predicts what search would find (best reply, eval a few moves on, threats) |
+| 6 | **Label quality** (items 12, 22) | deep labels on critical positions, tablebases for endgames, mate distance kept |
+| 7 | **Self-play every version** (items 11, 13) | trains where its own blind spots are; hard examples replayed more |
+| 8 | **Our own big teacher** (item 16) | 100M VibeFish teacher on Stockfish labels → distil into the ≤ 10M model |
+| 9 | **Game memory** (new items 25–26) | plans that last longer than 4 half-moves |
+| 10 | **Play-time tricks without search** (item 18) | mirror averaging; a 2–3 model ensemble totalling ≤ 10M |
+| 11 | **Don't forget** (new item 27) | replay buffer of older data in every run |
+
+New items:
+
+24. **Faster training:** profile a Kaggle step (data loading vs GPU), confirm the attention runs
+    on the fused kernel, try larger batches with LR scaling and feeding both GPUs better than
+    `nn.DataParallel` (DDP), and check whether the 68 tokens can shrink. Goal: ≥ 2× positions/s
+    at equal results.
+25. **Longer move history:** mark the last 8–16 half-moves instead of 4. Needs self-play data to
+    train it (lesson 2) and an `ENCODING_VERSION` bump.
+26. **Plan memory (recurrent state):** after each move the network keeps a small vector and reads
+    it back on its next move, like a notepad of its own thinking ("attacking the king side").
+    It never looks at other positions, so it is memory, not search. Trained on whole self-play
+    games (truncated backprop through time). A/B test vs the same model without it.
+27. **Replay buffer:** every run mixes in a fixed share of older data and the best older self-play
+    rounds, so new data never pushes out old skills.
+
+Rough goals on our scale (estimates; each step must win matches): v3 ~1,850–1,950 · v3.1 ~2,100 ·
+v3.2 ~2,300 · v4 ~2,500 · beyond: 2,600+ is the frontier, 3000 the moonshot.
 
 ### GPU budget (30 h/week)
 
