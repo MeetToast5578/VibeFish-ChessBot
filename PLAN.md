@@ -38,6 +38,10 @@ Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 
 Performance rating on our scale: v1 ≈ 975, v2 ≈ 1350–1650, v3 ≈ 1740–1990 (1991 vs SF 2000).
 
+Time-control check: `UCI_Elo` is calibrated at 60s+0.6s, our matches use 0.1 s/move. v3 vs SF 2000
+at **1.0 s/move**, 60 games: +23 =17 −20, 52.5% (perf 2017), vs 48.7% at 0.1 s. No inflation, so the
+0.1 s figures stand (`games/v3_vs_sf2000_1s.pgn`).
+
 ## How we decide (experiment protocol)
 
 - **Benchmarks** (`evaluate.py`, all policy only):
