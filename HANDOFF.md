@@ -10,8 +10,10 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   - `vibefish-v31-control` (our data only): **done, not shipped.** Even with v3: 50.5% head-to-head
     (+36 =29 −35), SF 2000 46.7% (v3 48.7%), puzzles 58.8% (v3 59.3%), held-out wp_lost 0.0252 /
     top1 52.9% (v3 0.028 / 52.2%). Lesson: more training on the same data no longer helps v3.
-  - `vibefish-v31-cb` (35% ChessBench best-move data, CB1 = positions 0–20M): **was still training**,
-    pushed 16:36 UTC, 240 min, so done ~20:45 UTC. Not benchmarked yet.
+  - `vibefish-v31-cb` (35% ChessBench best-move data, CB1 = positions 0–20M): **done, not
+    shipped.** Even with v3 too: 50.0% head-to-head (+31 =38 −31), SF 2000 52.5%, puzzles 59.1%,
+    held-out wp_lost 0.0243 / top1 54.3% (best of the three). So v3's size is the limit, not data.
+    Full table in PLAN.md (v3.1).
   - ChessBench shards on Kaggle: `vibefish-cb-1` (CB1_00–19, 20M) and `vibefish-cb-2` (positions
     20–40M) are both complete. cb-2 is unused so far. (`kaggle kernels output` lists sizes as
     "822"; the real files are ~484 MB each, per the kernel log.)
@@ -24,21 +26,16 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 
 ## Next steps, in order
 
-1. **Benchmark the ChessBench run** (same as the control, ~5 min locally):
+1. **v4** (owner's direction: bigger, deeper, loop through the layers; v3 isn't strong enough).
+   v3.1 is closed (see above). The benchmark recipe for any candidate:
    ```bash
-   kaggle kernels output yunus0901/vibefish-v31-cb -p kaggle_out/vibefish-v31-cb --file-pattern '(runs/|\.log$)'
+   python evaluate.py --model <model.pt> --puzzles --heldout --vs models/vibefish_v3.pt --games 100 --pgn games/<name>_vs_v3.pgn --log bench/results.jsonl
    ```
    ```bash
-   python evaluate.py --model kaggle_out/vibefish-v31-cb/runs/v31_cb/model.pt --puzzles --heldout --vs models/vibefish_v3.pt --games 100 --pgn games/v31_cb_vs_v3.pgn --log bench/results.jsonl
+   python evaluate.py --model <model.pt> --match 2000 --games 120 --pgn games/<name>_sf.pgn --log bench/results.jsonl
    ```
-   ```bash
-   python evaluate.py --model kaggle_out/vibefish-v31-cb/runs/v31_cb/model.pt --match 2000 --games 120 --pgn games/v31_cb_sf.pgn --log bench/results.jsonl
-   ```
-   Ship as v3.1 only if it clearly beats v3 head-to-head (≥ ~57% over 100 games). If it ships:
-   copy to `models/vibefish_v3_1.pt`, update the `play.py`/`evaluate.py` defaults, README and the
-   credit line "Trained in part on ChessBench (DeepMind, CC-BY 4.0)". Either way, record the result
-   in PLAN.md (v3.1 section) and copy its `log.jsonl` to `bench/train_logs/v31_cb.jsonl`.
-2. **v4** (owner's direction: bigger, deeper, loop through the layers; v3 isn't strong enough).
+   Ship only if it clearly beats v3 head-to-head (≥ ~57% over 100 games). If ChessBench data is in
+   a shipped model, add the README credit line "Trained in part on ChessBench (DeepMind, CC-BY 4.0)".
 
 ## v4 plan (agreed in chat, not started)
 
