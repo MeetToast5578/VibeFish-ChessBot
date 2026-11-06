@@ -33,8 +33,8 @@ _pick = None
 
 
 def make_pick(spec):
-    """spec = ("v2", model_path, mix) or ("v1", checkout_dir, None) -> pick(board) -> move."""
-    kind, path, mix = spec
+    """spec = ("v2", model_path, mix, strip) or ("v1", checkout_dir, None, False) -> pick(board) -> move."""
+    kind, path, mix, strip = spec
     torch.set_num_threads(1)
     if kind == "v1":
         mspec = importlib.util.spec_from_file_location("v1model", os.path.join(path, "model.py"))
@@ -44,9 +44,9 @@ def make_pick(spec):
         net.load_state_dict(torch.load(os.path.join(path, "run/model.pt")))
         net.eval()
         return lambda b: net.pick(b)
-    from model import load
+    from model import load, without_history
     net = load(path)
-    return lambda b: net.pick(b, mix=mix)
+    return lambda b: net.pick(without_history(b) if strip else b, mix=mix)
 
 
 def _init(spec):
@@ -145,6 +145,7 @@ if __name__ == "__main__":
     p.add_argument("--model", default="models/vibefish_v2.pt")
     p.add_argument("--v1", help="path to a VibeFish v1 checkout (evaluates v1 instead)")
     p.add_argument("--mix", type=float, default=0.0, help="weight of the action-value head in the move choice")
+    p.add_argument("--strip-history", action="store_true", help="hide move history from the model")
     p.add_argument("--puzzles", action="store_true")
     p.add_argument("--heldout", action="store_true")
     p.add_argument("--match", default="", help="comma list of UCI_Elo levels and/or 'random'")
@@ -153,8 +154,8 @@ if __name__ == "__main__":
     p.add_argument("--workers", type=int, default=os.cpu_count())
     p.add_argument("--log", help="append results as JSON here")
     a = p.parse_args()
-    spec = ("v1", a.v1, None) if a.v1 else ("v2", a.model, a.mix)
-    out = {"model": a.v1 or a.model, "mix": a.mix}
+    spec = ("v1", a.v1, None, False) if a.v1 else ("v2", a.model, a.mix, a.strip_history)
+    out = {"model": a.v1 or a.model, "mix": a.mix, "strip_history": a.strip_history}
     with mp.Pool(a.workers, _init, (spec,)) as pool:
         if a.heldout:
             out.update(heldout(pool)); print(out, flush=True)

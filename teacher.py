@@ -103,11 +103,8 @@ def play_game(seed, max_plies=200):
         start = max(0, board.ply() - HISTORY)
         records.append((fens[start], [m.uci() for m in board.move_stack[start:]], scores))
         temp = 1.0 if board.ply() < 10 else (0.3 if rng.random() < 0.25 else 0.0)
-        view = board
-        if _strip:   # a model trained only on history-free positions plays better without it
-            view = chess.Board(board.fen())
-            view.halfmove_clock = 0
-        move = _model.pick(view, temperature=temp, mix=1.0)
+        from model import without_history   # a model trained only on history-free data plays better without it
+        move = _model.pick(without_history(board) if _strip else board, temperature=temp, mix=1.0)
         best = max(scores.values())
         if move.uci() in scores:
             lost.append(float(to_grade(best).clip(0, 1) - to_grade(scores[move.uci()]).clip(0, 1)))

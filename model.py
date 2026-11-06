@@ -43,6 +43,13 @@ def unorient_index(board: chess.Board, idx: int) -> chess.Move:
     return move
 
 
+def without_history(board: chess.Board) -> chess.Board:
+    """Same position with no move stack and a zero 50-move clock (what history-free training data looks like)."""
+    b = chess.Board(board.fen())
+    b.halfmove_clock = 0
+    return b
+
+
 def legal_indices(board: chess.Board) -> list[int]:
     """Unique oriented move indices of legal moves (under-promotions collapse into queen promo)."""
     return sorted({orient_move(board, m) for m in board.legal_moves})
