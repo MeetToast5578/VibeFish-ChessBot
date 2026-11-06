@@ -61,7 +61,7 @@ shards so the CPU only does the network.
 
 ## Measurement (all policy-only, one forward pass per move)
 
-1. **Puzzles**: Lichess puzzle DB, fixed 1,000-puzzle sample across ratings. Solved = every
+1. **Puzzles**: Lichess puzzle DB, fixed 1,050-puzzle sample (150 per rating band). Solved = every
    solution move matched (any mate-in-1 counts).
 2. **Held-out wp lost**: 1,000 Lichess positions never trained on, every move graded by SF 17.1
    depth 12. Avg win prob given up vs best move, and top-1.
@@ -70,14 +70,48 @@ shards so the CPU only does the network.
 ## Steps
 
 - [x] 0. Environment: venv, SF 17.1 binary, data download, throughput measurements
-- [ ] 1. Docs: PLAN.md, CLAUDE.md, requirements
-- [ ] 2. v2 code: encoding, model, grading fix, data pipeline, trainer, eval, tests
-- [ ] 3. Baseline: v1 on the new benchmarks
-- [ ] 4. Data: encode L, generate S
-- [ ] 5. Pilot runs: pick model size / decision rule at equal wall-clock
-- [ ] 6. Main training run
+- [x] 1. Docs: PLAN.md, CLAUDE.md, requirements
+- [x] 2. v2 code: encoding, model, grading fix, data pipeline, trainer, eval, tests
+- [x] 3. Baseline: v1 on the new benchmarks (below)
+- [x] 4. Data: L = 6M Lichess positions; S_0 = 100k Lichess FENs and S_puz = 119k puzzle positions,
+      all moves graded at depth 8
+- [x] 5. Pilot runs: model size at equal wall-clock (below)
+- [ ] 6. Main training run (d=192, 6 layers, 250 min)
 - [ ] 7. DAgger round(s) + fine-tune
 - [ ] 8. Final eval, README, ship v2 weights
+
+## Log
+
+**v1 baseline** (new benchmarks, policy only): puzzles 10.5%, held-out wp lost 0.086 / top-1 33%,
+vs random +1 =18 −1, vs SF 17.1 `UCI_Elo` 1320 +0 =7 −13 (perf ≈ 1050).
+
+**Data notes.** The Lichess eval DB leans to endgames (median 18 pieces, 43% of positions have a
+single graded move), so the all-moves set was topped up with puzzle positions (middlegame tactics).
+python-chess's `analyse()` spent as much CPU as Stockfish (it validates PVs); a bare UCI reader
+doubled grading speed with identical results.
+
+**Pilots** (Lichess data only, 40 min each, 2 threads, run side by side):
+
+| model | params | samples | held-out wp lost | top-1 |
+|---|---|---|---|---|
+| d=128, 6 layers | 1.29M | 254k | 0.0809 | 31.3% |
+| d=192, 6 layers | 2.88M | 148k | 0.0807 | 30.7% |
+
+Tied at 40 min with 42% fewer samples for the bigger net, so it learns more per sample and
+should win over a long run. Picked d=192. Policy-only vs policy+action-value mix: no difference
+yet. Both already beat v1's held-out score after 40 min.
+
+`torch.compile` would add ~15%, but this box's g++ lacks `cc1plus`, so training runs eager.
+
+**Main run, step 2000 (1M samples):** held-out wp lost 0.066, top-1 38%, puzzles 25%, but
+**0–20 vs SF 1320**, worse than v1. Cause: train/play mismatch. Lichess and puzzle positions carry
+no move history, so the last-move markers, 50-move-clock buckets and repetition token were never
+trained. In real games they are always set, and their untrained (random-init) embeddings scramble
+the input. Same checkpoint with history stripped at play time: +3 =4 −13 vs SF 1320 (perf ≈ 1130),
++9 =1 −0 vs random. Fix: DAgger games (which do carry history) go into the fine-tune, so those
+features get trained. The DAgger games are generated with history stripped, so they show the
+positions the model actually reaches. Lesson: **every input feature needs training data that
+exercises it**. A feature that is constant in training is a landmine at play time.
 
 ## Ideas parked (only if time remains)
 

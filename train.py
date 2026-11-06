@@ -129,7 +129,6 @@ def main():
     print(rec, flush=True)
     log.write(json.dumps(rec) + "\n")
 
-    fast = torch.compile(model)   # ~15% faster on CPU; shares weights with `model`
     t0, step, seen, run = time.time(), 0, 0, np.zeros(3)
     budget = args.minutes * 60
     while (frac := (time.time() - t0) / budget) < 1:
@@ -137,7 +136,7 @@ def main():
         for gr in opt.param_groups:
             gr["lr"] = lr
         batch = to_batch([s.take(n) for s, n in zip(sources, counts) if n])
-        pol, act, val, _ = losses(fast, batch)
+        pol, act, val, _ = losses(model, batch)
         loss = pol + args.w_action * act + args.w_value * val
         opt.zero_grad(set_to_none=True)
         loss.backward()

@@ -3,7 +3,7 @@
   python evaluate.py --model models/vibefish_v2.pt --puzzles --heldout --match 1320,1600 --games 40
   python evaluate.py --v1 /path/to/v1/checkout ...      # VibeFish v1 (policy only), for comparison
 
-puzzles  bench/puzzles.csv: 1,000 Lichess puzzles across ratings. Solved = every move matched
+puzzles  bench/puzzles.csv: 1,050 Lichess puzzles (7 rating bands). Solved = every move matched
          (any checkmating move also counts).
 heldout  bench/heldout.pkl: 1,000 Lichess positions, every legal move graded by SF 17.1 depth 12.
          wp_lost = win prob given up vs the best move, top1 = picked a best move.
