@@ -25,3 +25,4 @@
 {"model": "models/vibefish_v3.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 1.0, "W": 22, "D": 16, "L": 22, "score": 0.5, "perf_elo": 2000}]}
 {"model": "models/vibefish_v3.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 1.0, "W": 23, "D": 17, "L": 20, "score": 0.525, "perf_elo": 2017}]}
 {"model": "kaggle_out/vibefish-v31-cb/runs/v31_cb/model.pt", "mix": 0.0, "strip_history": false, "wp_lost": 0.0243, "top1": 0.543, "puzzles": 0.5914, "puz_400": 0.993, "puz_800": 0.96, "puz_1200": 0.88, "puz_1600": 0.68, "puz_2000": 0.38, "puz_2400": 0.233, "puz_2800": 0.013, "matches": [{"opp": "models/vibefish_v3.pt", "movetime": 0.1, "W": 31, "D": 38, "L": 31, "score": 0.5}]}
+{"model": "kaggle_out/vibefish-v31-cb/runs/v31_cb/model.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 46, "D": 22, "L": 52, "score": 0.475, "perf_elo": 1983}]}
