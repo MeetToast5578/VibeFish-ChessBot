@@ -176,10 +176,10 @@ What we take from it:
 
 ### v4: distillation and compactness
 
-16. **Teacher → student:** train a bigger teacher (e.g. 50–100M) or use DeepMind's published
-    checkpoints (CC-BY 4.0, JAX; would need a converter and inference cost tests), have it label
-    positions the small model reaches, and train the small model on those labels. Removes the
-    Stockfish CPU bottleneck for self-play.
+16. **Teacher → student (our own teacher only):** train a bigger VibeFish teacher (e.g. 50–100M)
+    on Stockfish labels, have it label positions the small model reaches, and train the small
+    model on those labels. Only worth it if Stockfish CPU time becomes the self-play bottleneck.
+    Never DeepMind's models as a teacher (see "Ruled out").
 17. **int8 quantization** of the shipped model (~4× smaller); ship only if matches don't drop.
 18. **At play time, still no search:** mirror averaging for positions without castling rights;
     a small ensemble only if the gain justifies the size.
@@ -189,8 +189,7 @@ What we take from it:
 ### Stretch goal: beat DeepMind's 270M with far less
 
 Their recipe is huge data with a generic model and generic training. Ours has to win on
-**efficiency per example**. Smolgen (6), tablebases (12) and teacher → student (16) are
-already above. What's new:
+**efficiency per example**. Smolgen (6) and tablebases (12) are already above. What's new:
 
 20. **Head-to-head test harness.** Load their published 270M (and 9M/136M) checkpoints and play
     120+ game matches VibeFish vs DeepMind, same time control, same rules, both searchless. Also
@@ -207,14 +206,25 @@ already above. What's new:
 23. **Deeper pass by reusing layers (recurrent depth).** Run the same block 2–4 times on the
     current position: more computation per move, no extra parameters, still no search.
     Also test whether running more loops at play time than in training helps.
-24. **Use their model as a free labeller.** Running the 270M is far cheaper than training it:
-    let it grade the positions VibeFish reaches in self-play (item 16), mixed with Stockfish
-    labels. A student rarely beats its teacher, so this gets us close; items 21–23, self-play
-    on our own mistakes and our extra features (history, mate distance, attack maps) are
-    what can push past it.
+24. **Copy their 9M's arrangement and weights (weight transplant), then learn only from
+    Stockfish.** Their 9M is 8 layers × 256 wide, 8 heads, SwiGLU MLP ×4, post-norm, learned
+    positional encodings (paper, appendix A.2). That is v3's skeleton (8 × 256); v3 uses a GELU
+    MLP and pre-norm, hence 6.7M vs 9M params.
+    1. Switch our block to theirs (SwiGLU, their norm placement) behind a flag.
+    2. Convert their 9M checkpoint and load its 8 transformer blocks into ours. Keep our own
+       embeddings and heads: their input is 77 FEN characters in white's frame, ours is 68 feature
+       tokens in the mover's frame. Map their per-square positional embeddings onto our square
+       order as a starting point.
+    3. Train only on our Stockfish labels and self-play, never on their outputs.
+    4. Test vs from-scratch at equal GPU time: held-out curves, then matches. A head start counts
+       most when compute is short, which is our case. It may also fade with enough training.
 
-Stages: v3 → ~1,700–1,900 (estimate); v3.1–v3.2 + items 21–22 → aim at their 9M (~2025);
-v4 + items 16, 23, 24 → head-to-head vs their 136M, then 270M.
+    Only the 9M fits our 10M cap; the 136M/270M weights can't be copied in. CC-BY 4.0: credit
+    DeepMind in the README if a shipped model starts from their weights. Shares the checkpoint
+    converter with item 20.
+
+Stages: v3 → ~1,700–1,900 (estimate); v3.1–v3.2 + items 21, 22, 24 → aim at their 9M (~2025);
+v4 + item 23 and more self-play → head-to-head vs their 136M, then 270M.
 
 ### GPU budget (30 h/week)
 
@@ -233,6 +243,9 @@ notebooks and this machine, never on the GPU clock.
 - **Opening book** and **tablebase probing at play time**: not search, but not the network either.
 - Anything that evaluates positions after a candidate move (1-ply lookahead, MCTS, alpha-beta).
 - Training on the benchmark sets (`bench/exclude.txt` keeps puzzle positions out of training data).
+- **DeepMind's models as a teacher** (training on their outputs or labels they produce): owner's
+  call, a searchless teacher can't beat Stockfish labels. Their models are used only as an
+  opponent/benchmark (item 20) and as a weight starting point (item 24).
 
 ## History
 
