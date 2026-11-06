@@ -15,16 +15,12 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   - ChessBench shards on Kaggle: `vibefish-cb-1` (CB1_00–19, 20M) and `vibefish-cb-2` (positions
     20–40M) are both complete. cb-2 is unused so far. (`kaggle kernels output` lists sizes as
     "822"; the real files are ~484 MB each, per the kernel log.)
-- **Evaluation check (in progress):** Stockfish's `UCI_Elo` is calibrated at 60s+0.6s, but our
-  matches gave it 0.1 s/move, so our perf Elo numbers may be inflated. `evaluate.py --movetime`
-  exists now (default 0.1). A run of v3 vs SF 2000 at **1.0 s/move, 60 games** was started locally
-  at ~19:50 UTC (writes `games/v3_vs_sf2000_1s.pgn` and a line in `bench/results.jsonl` when done).
-  If the session died, rerun it (~15 min):
-  ```bash
-  python evaluate.py --model models/vibefish_v3.pt --match 2000 --games 60 --movetime 1.0 --pgn games/v3_vs_sf2000_1s.pgn --log bench/results.jsonl
-  ```
-  Compare with v3's 48.7% at 0.1 s. A big drop means the Elo figures in README/PLAN need redoing
-  at the longer time control. The owner's "v3 plays a lot of h4" worry was checked: early h4/...h5
+- **Evaluation check (done):** Stockfish's `UCI_Elo` is calibrated at 60s+0.6s, but our
+  matches gave it 0.1 s/move, so our perf Elo numbers might have been inflated. Checked with
+  `evaluate.py --movetime 1.0`: v3 vs SF 2000 at 1 s/move scored **50.0%** (+22 =16 −22, 60 games,
+  `games/v3_vs_sf2000_1s_run2.pgn`) and, in a second session's run, **52.5%** (+23 =17 −20,
+  `games/v3_vs_sf2000_1s.pgn`), vs 48.7% at 0.1 s. Stockfish's limited strength barely changes with
+  more time, so the 0.1 s numbers stand (still on Stockfish's scale, not Lichess/FIDE). The owner's "v3 plays a lot of h4" worry was checked: early h4/...h5
   appears in 19% of v3's games vs 21–30% for Stockfish 1320–2000 in the same matches, so not a bug.
 
 ## Next steps, in order
@@ -43,7 +39,7 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
    copy to `models/vibefish_v3_1.pt`, update the `play.py`/`evaluate.py` defaults, README and the
    credit line "Trained in part on ChessBench (DeepMind, CC-BY 4.0)". Either way, record the result
    in PLAN.md (v3.1 section) and copy its `log.jsonl` to `bench/train_logs/v31_cb.jsonl`.
-2. ~~Time-control check~~ done: v3 52.5% vs SF 2000 at 1 s/move (48.7% at 0.1 s). Elo figures stand.
+2. ~~Time-control check~~ done: v3 vs SF 2000 at 1 s/move, two 60-game runs: 52.5% and 50.0% (48.7% at 0.1 s). Elo figures stand.
 3. **v4** (owner's direction: bigger and deeper, ≤ 14M; v3 isn't strong enough).
 
 ## v4 plan (agreed in chat; model code done, pilots not started)
