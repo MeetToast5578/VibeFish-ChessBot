@@ -42,25 +42,32 @@ args = p.parse_args()
 
 
 class Source:
-    """All shards matching a glob, sampled without replacement (reshuffled each pass).
-    shortcut: loads every shard into RAM (~480 B/position), switch to per-shard memmap streaming past ~20M positions."""
+    """All shards matching a glob, sampled without replacement (reshuffled each pass). Shards stay
+    separate (no big concatenate) so peak RAM is just the data (~530 B/position with kmax=8).
+    shortcut: everything is held in RAM; switch to memmapped .npy shards past ~40M positions."""
     def __init__(self, pattern, weight, rng, kmax=None):
-        parts = [(x, i[:, :kmax], s[:, :kmax]) for x, i, s in map(load_shard, sorted(glob.glob(pattern)))]   # moves are sorted best-first
-        assert parts, f"no shards match {pattern}"
-        k = max(i.shape[1] for _, i, _ in parts)
-        pad = lambda a, v: np.pad(a, ((0, 0), (0, k - a.shape[1])), constant_values=v)
-        self.x = np.concatenate([x for x, _, _ in parts])
-        self.idx = np.concatenate([pad(i, -1) for _, i, _ in parts])
-        self.score = np.concatenate([pad(s, 0) for _, _, s in parts])
-        self.weight, self.rng, self.pos, self.perm = weight, rng, 0, rng.permutation(len(self.x))
+        # moves are stored best-first, so [:, :kmax] keeps the best ones; copy so the full arrays are freed
+        self.parts = [(x, np.ascontiguousarray(i[:, :kmax]), np.ascontiguousarray(s[:, :kmax]))
+                      for x, i, s in map(load_shard, sorted(glob.glob(pattern)))]
+        assert self.parts, f"no shards match {pattern}"
+        self.ends = np.cumsum([len(x) for x, _, _ in self.parts])
+        self.n = int(self.ends[-1])
+        self.weight, self.rng, self.pos, self.perm = weight, rng, 0, rng.permutation(self.n)
         self.name = pattern
 
     def take(self, n):
-        if self.pos + n > len(self.perm):
-            self.perm, self.pos = self.rng.permutation(len(self.x)), 0
+        """A list of (x, idx, score) pieces, one per shard hit; to_batch pads and joins them."""
+        if self.pos + n > self.n:
+            self.perm, self.pos = self.rng.permutation(self.n), 0
         ids = np.sort(self.perm[self.pos:self.pos + n])
         self.pos += n
-        return self.x[ids], self.idx[ids], self.score[ids]
+        shard = np.searchsorted(self.ends, ids, side="right")
+        out = []
+        for s in np.unique(shard):
+            local = ids[shard == s] - (self.ends[s - 1] if s else 0)
+            x, i, sc = self.parts[s]
+            out.append((x[local], i[local], sc[local]))
+        return out
 
 
 def to_batch(parts):
@@ -120,7 +127,7 @@ def main():
     for item in args.mix.split(","):
         pattern, w, *kmax = item.split(":")
         sources.append(Source(pattern, float(w), rng, int(kmax[0]) if kmax else None))
-        print(f"{pattern}: {len(sources[-1].x)} positions, weight {w}", flush=True)
+        print(f"{pattern}: {sources[-1].n} positions, weight {w}", flush=True)
     total_w = sum(s.weight for s in sources)
     counts = [round(args.batch * s.weight / total_w) for s in sources]
     hx, hi, hs = load_shard(args.heldout)
@@ -138,7 +145,8 @@ def main():
     print(rec, flush=True)
     log.write(json.dumps(rec) + "\n")
 
-    fast = torch.compile(model) if args.compile else model   # shares weights with `model`
+    # shares weights with `model`; compile + DataParallel crash together, so multi-GPU wins
+    fast = torch.compile(model) if args.compile and not args.multi_gpu else model
     if args.multi_gpu and torch.cuda.device_count() > 1:
         fast = torch.nn.DataParallel(fast)
     t0, step, seen, run = time.time(), 0, 0, np.zeros(3)
@@ -147,7 +155,7 @@ def main():
         lr = args.lr * min(1, (step + 1) / args.warmup) * (0.05 + 0.95 * 0.5 * (1 + math.cos(math.pi * frac)))
         for gr in opt.param_groups:
             gr["lr"] = lr
-        batch = [t.to(dev, non_blocking=True) for t in to_batch([s.take(n) for s, n in zip(sources, counts) if n])]
+        batch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(sources, counts) if n for p in s.take(n)])]
         with torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda"):   # mixed precision on GPUs only (slower on this CPU)
             pol, act, val, _ = losses(fast, batch)
         loss = pol + args.w_action * act + args.w_value * val

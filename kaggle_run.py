@@ -4,7 +4,7 @@
   python kaggle_run.py --name vibefish-smoke --dataset yunus0901/vibefish-v2-data \
       --cmd "python train.py --mix 'data/S_0.npz:1' --minutes 5 --out /kaggle/working/runs/smoke" --wait
 
-Inside the notebook the dataset is linked as ./data, and anything written to /kaggle/working is
+Inside the notebook the files of all attached datasets are linked into ./data, and anything written to /kaggle/working is
 kept as output (put --out there). The code runs from /tmp so the data link isn't saved as output.
 """
 import argparse
@@ -17,17 +17,18 @@ import tarfile
 import tempfile
 import time
 
-CODE = ["model.py", "teacher.py", "data.py", "train.py", "evaluate.py"]
+CODE = ["model.py", "teacher.py", "data.py", "train.py", "evaluate.py", "bench/exclude.txt"]
 
 JOB = '''import base64, glob, io, os, subprocess, sys, tarfile
 tarfile.open(fileobj=io.BytesIO(base64.b64decode("{code}"))).extractall("/tmp/vf")
 os.chdir("/tmp/vf")
 subprocess.run("pip install -q chess zstandard", shell=True, check=True)
-found = glob.glob("/kaggle/input/**/heldout.npz", recursive=True)
-assert found, "dataset not attached"
-os.symlink(os.path.dirname(found[0]), "data")
+os.makedirs("data")   # every attached dataset's files, side by side
+for f in glob.glob("/kaggle/input/**/*.np[zy]", recursive=True) + glob.glob("/kaggle/input/**/*.pkl", recursive=True):
+    os.symlink(f, "data/" + os.path.basename(f))
+assert os.path.exists("data/heldout.npz"), "dataset not attached"
 os.makedirs("/kaggle/working/runs", exist_ok=True)
-subprocess.run("nvidia-smi", shell=True)
+subprocess.run("nvidia-smi || true", shell=True)
 for cmd in {cmds!r}:
     print(">>>", cmd, flush=True)
     if subprocess.run(cmd, shell=True).returncode:
@@ -54,14 +55,17 @@ def main():
     p.add_argument("--dataset", action="append", default=[])
     p.add_argument("--cmd", action="append", required=True)
     p.add_argument("--gpu", default="NvidiaTeslaT4")
+    p.add_argument("--cpu", action="store_true", help="CPU-only notebook (doesn't use GPU quota), e.g. for Stockfish grading")
+    p.add_argument("--kernel-source", action="append", default=[], help="attach another notebook's output, user/slug")
     p.add_argument("--wait", action="store_true", help="poll until done, then download outputs to kaggle_out/<name>")
     a = p.parse_args()
     ref = f"{a.user}/{a.name}"
     with tempfile.TemporaryDirectory() as d:
         open(f"{d}/job.py", "w").write(JOB.format(code=pack(), cmds=a.cmd))
         json.dump({"id": ref, "title": a.name, "code_file": "job.py", "language": "python",
-                   "kernel_type": "script", "is_private": True, "enable_gpu": True, "enable_internet": True,
-                   "machine_shape": a.gpu, "dataset_sources": a.dataset}, open(f"{d}/kernel-metadata.json", "w"))
+                   "kernel_type": "script", "is_private": True, "enable_gpu": not a.cpu, "enable_internet": True,
+                   "machine_shape": None if a.cpu else a.gpu, "dataset_sources": a.dataset,
+                   "kernel_sources": a.kernel_source}, open(f"{d}/kernel-metadata.json", "w"))
         r = kaggle("kernels", "push", "-p", d)
         print(r.stdout.strip(), r.stderr.strip())
         if r.returncode:
