@@ -6,7 +6,8 @@ A **small, searchless** chess bot.
 
 - **Searchless:** the network looks only at the *current* position (once, or a handful of
   times, e.g. a mirrored copy) and picks a move. Nothing evaluates positions after a candidate
-  move: no 1-ply lookahead, no MCTS, no alpha-beta.
+  move: no 1-ply lookahead, no MCTS, no alpha-beta. Reusing the same layers several times on the
+  current position (a deeper pass, item 23) is allowed: it never looks at any other position.
 - **Network only:** no opening book and no tablebase probing at play time. Books, tablebases and
   Stockfish may be used to make *training labels*.
 - **Compact:** ≤ 10M parameters and ≤ 20 MB shipped (≤ 5 MB with int8 is the stretch goal).
@@ -18,6 +19,7 @@ Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 | v3 | clearly beat v2 in 120-game matches |
 | v4 | score 50% against SF `UCI_Elo` 2000 (v2: 12%) |
 | long term | approach DeepMind's 9M searchless model (~2000 Elo vs bots, see below) |
+| stretch | beat DeepMind's 270M model head-to-head with ≤ 10M params and free compute (see "Stretch goal") |
 
 ## Where we are
 
@@ -183,6 +185,36 @@ What we take from it:
     a small ensemble only if the gain justifies the size.
 19. **Lichess bot account** (needs the owner to create it) via `play.py --uci` + lichess-bot, for a
     real, human-comparable rating.
+
+### Stretch goal: beat DeepMind's 270M with far less
+
+Their recipe is huge data with a generic model and generic training. Ours has to win on
+**efficiency per example**. Smolgen (6), tablebases (12) and teacher → student (16) are
+already above. What's new:
+
+20. **Head-to-head test harness.** Load their published 270M (and 9M/136M) checkpoints and play
+    120+ game matches VibeFish vs DeepMind, same time control, same rules, both searchless. Also
+    run both on their 10k puzzles. This replaces cross-scale Elo guessing with a direct result,
+    and it is the gate for every step below. Needs a JAX → inference wrapper and a CPU/GPU cost test.
+21. **Auxiliary targets that teach lookahead without search.** Stockfish already computes these
+    while grading, so the labels are free: the opponent's best reply, the eval 2–3 plies along
+    the PV, hanging pieces and threats per square. Extra heads, used only in training. KataGo
+    reported ~50× less compute than AlphaZero-style training, partly from auxiliary targets.
+    Test: equal GPU time with vs without, on held-out and matches.
+22. **Label quality beats label count where it matters.** Our depth-8 labels are *weaker* than
+    theirs (SF16 at 50 ms per move). Grade critical positions (close top-2 moves, big eval swings,
+    self-play blunders) at depth 14–18, keep depth 8 for the bulk, tablebases for endgames.
+23. **Deeper pass by reusing layers (recurrent depth).** Run the same block 2–4 times on the
+    current position: more computation per move, no extra parameters, still no search.
+    Also test whether running more loops at play time than in training helps.
+24. **Use their model as a free labeller.** Running the 270M is far cheaper than training it:
+    let it grade the positions VibeFish reaches in self-play (item 16), mixed with Stockfish
+    labels. A student rarely beats its teacher, so this gets us close; items 21–23, self-play
+    on our own mistakes and our extra features (history, mate distance, attack maps) are
+    what can push past it.
+
+Stages: v3 → ~1,700–1,900 (estimate); v3.1–v3.2 + items 21–22 → aim at their 9M (~2025);
+v4 + items 16, 23, 24 → head-to-head vs their 136M, then 270M.
 
 ### GPU budget (30 h/week)
 
