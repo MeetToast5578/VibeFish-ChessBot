@@ -42,7 +42,19 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 2. ~~Time-control check~~ done: v3 vs SF 2000 at 1 s/move, two 60-game runs: 52.5% and 50.0% (48.7% at 0.1 s). Elo figures stand.
 3. **v4** (owner's direction: bigger and deeper, ≤ 14M; v3 isn't strong enough).
 
-## v4 plan (agreed in chat; model code done, pilots not started)
+## v4 status (2026-11-06, ~22:50 UTC)
+
+- **Pilots done** (PLAN.md v4 section A has the table). A (16 layers + bias) scored 53% vs v3 and
+  B 48.5%, both within noise. The 8 added layers barely trained (weight norm ~3 vs ~70), so
+  `train.py --boost-from 8 --boost 5` now gives them 5× lr. Both models are in `models/`.
+- **Main run:** continues pilot A for ~10.5 h with the boost, CB3 (fresh ChessBench, positions
+  40–60M) instead of CB2. Kernel `vibefish-v4-main`. It saves `model.pt`, `ema.pt` and `opt.pt`
+  every 4,000 steps. When it finishes, benchmark both `model.pt` and `ema.pt`.
+- **Self-play D4** (CPU, free): `vibefish-d4-1` / `-2`, 2,000 games each from pilot A. Outputs are
+  `D4_*.npz`, for a 2–3 h fine-tune after the main run.
+- `vibefish-cb-4` (positions 60–80M) is for that fine-tune too.
+
+## v4 plan (agreed in chat)
 
 Owner's rules: **≤ 14M params** (raised from 10M for v4: "bigger but not too big"), one forward
 pass per move, no search; DeepMind models only as opponents, ChessBench data allowed with credit.
