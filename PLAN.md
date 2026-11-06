@@ -166,11 +166,26 @@ instead: 527M positions, each with Stockfish 16's best move (50 ms/move).
       records with an UNKNOWN score: a one-hot policy target, skipped by the value and
       action-value losses. Benchmark puzzle positions and held-out positions
       (`bench/heldout_fens.txt`) are excluded. ~4k positions/s on 4 cores, ~480 B/position.
-- [ ] Kaggle CPU notebooks `vibefish-cb-1` / `-2`: positions 0–20M and 20–40M.
-- [ ] Equal-GPU-time test, both from v3, 4 h, lr 2e-4, same data otherwise: `vibefish-v31-control`
+- [x] Kaggle CPU notebooks `vibefish-cb-1` / `-2`: positions 0–20M and 20–40M (~1.5 h each).
+- [x] Equal-GPU-time test, both from v3, 4 h, lr 2e-4, same data otherwise: `vibefish-v31-control`
       (L 25%, L2_00–09 35%, S2_a–h 20%, D3 12%, S/D1/D2 8%) vs `vibefish-v31-cb` (CB1 35%,
-      L 10%, L2_00–09 15%, rest the same). L2 is halved in both so CB fits in the 29 GB of RAM.
-- [ ] Matches vs v3 (head-to-head and SF 2000); ship the winner if it beats v3.
+      L 10%, L2_00–09 15%, rest the same). L2 is halved in both so CB fits in the 29 GB of RAM
+      (it did; ~52M positions seen in each run).
+- [x] **Result: neither beats v3, nothing shipped.**
+
+  | | v3 | control | ChessBench |
+  |---|---|---|---|
+  | head-to-head vs v3 (100 games) | – | 50.5% (+36 =29 −35) | 50.0% (+31 =38 −31) |
+  | SF 2000 (120 games, 0.1 s) | 48.7% | 46.7% | 52.5% (perf 2017) |
+  | puzzles | 59.3% | 58.8% | 59.1% |
+  | held-out wp_lost / top1 | 0.028 / 52.2% | 0.0252 / 52.9% | 0.0243 / 54.3% |
+
+  ChessBench gave the best held-out accuracy (+2 points top-1) and the best SF score, but the
+  same games vs v3. Lesson: **v3's 6.7M model is saturated**. Four more hours on old or new data
+  move held-out accuracy a little and match results not at all. Next lever is capacity (v4:
+  more layers, looping, attention bias), with ChessBench kept in the mix since it was the better
+  of the two. Also checked: SF's limited strength doesn't depend on our 0.1 s/move (v3 scores
+  50.0% vs SF 2000 at 1 s/move), so the Elo figures stand.
 
 Original plan:
 
