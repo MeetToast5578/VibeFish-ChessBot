@@ -139,8 +139,10 @@ What we take from it:
 - [x] GPU path on Kaggle: fp16 on T4, both GPUs, shard-wise sampling (RAM), multi-dataset jobs
 - [x] Data: +20M Lichess positions (L2), ~3.2M every-move-graded puzzle positions (S2)
 - [x] Stage 1: 6.7M model, 3 h on 2×T4 (L + L2 + S + D), 39M positions seen. Puzzles 56.0%,
-      held-out wp lost 0.024, +24 =7 −9 vs SF 1600 (40 games, perf ≈ 1737; v2 scored 31%).
-- [ ] Self-play round D3 from the stage-1 model (half the games from real middlegame positions)
+      held-out wp lost 0.024. 120-game matches: random +114 =6 −0; SF 1320 86.7% (perf 1645);
+      SF 1600 64.6% (perf 1704); SF 2000 40.0% (perf 1930; v2: 11.7%).
+- [x] Self-play D3: 3,000 games from the stage-1 model, ~218k positions; its own moves lose
+      0.027 wp on average (v2's D2: 0.036)
 - [ ] Stage 2: fine-tune with S2 + D3
 - [ ] Benchmarks vs v2; ship v3 only if it wins the 120-game matches
 
