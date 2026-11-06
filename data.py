@@ -155,7 +155,8 @@ def cmd_sf(a):
 
 
 def cmd_dagger(a):
-    with mp.Pool(a.workers, teacher.init_worker, (a.depth, a.model, a.strip_history)) as pool:
+    starts = [l.split(",")[1] for l in itertools.islice(lichess_lines(a.start_puzzles, 1, a.games), a.games)] if a.start_puzzles else []
+    with mp.Pool(a.workers, teacher.init_worker, (a.depth, a.model, a.strip_history, starts)) as pool:
         res = pool.map(teacher.play_game, range(a.seed, a.seed + a.games), chunksize=1)
     lost = [l for _, ls in res for l in ls]
     print(f"model's own moves lost {np.mean(lost):.4f} win prob on average over {len(lost)} moves")
@@ -204,6 +205,7 @@ if __name__ == "__main__":
     p.add_argument("--depth", type=int, default=8)
     p.add_argument("--model")
     p.add_argument("--strip-history", action="store_true", help="dagger: the model plays without history features")
+    p.add_argument("--start-puzzles", help="dagger: start half the games from game positions in this puzzle dump")
     p.add_argument("--games", type=int, default=1000)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--shard-size", type=int, default=1_000_000)
