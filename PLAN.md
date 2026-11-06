@@ -138,7 +138,8 @@ What we take from it:
 
 - [x] GPU path on Kaggle: fp16 on T4, both GPUs, shard-wise sampling (RAM), multi-dataset jobs
 - [x] Data: +20M Lichess positions (L2), ~3.2M every-move-graded puzzle positions (S2)
-- [ ] Stage 1: 6.7M model, 3 h on 2×T4 (L + L2 + S + D)
+- [x] Stage 1: 6.7M model, 3 h on 2×T4 (L + L2 + S + D), 39M positions seen. Puzzles 56.0%,
+      held-out wp lost 0.024, +24 =7 −9 vs SF 1600 (40 games, perf ≈ 1737; v2 scored 31%).
 - [ ] Self-play round D3 from the stage-1 model (half the games from real middlegame positions)
 - [ ] Stage 2: fine-tune with S2 + D3
 - [ ] Benchmarks vs v2; ship v3 only if it wins the 120-game matches
