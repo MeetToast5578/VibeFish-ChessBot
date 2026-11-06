@@ -14,9 +14,10 @@ Strength must come from data, features, losses and training.
 | `train.py` | trainer over shards (mixed sources, cosine LR), checkpoints |
 | `evaluate.py` | puzzles, held-out wp-lost, matches vs Stockfish `UCI_Elo` |
 | `play.py` | terminal play and `--uci` engine mode |
+| `kaggle_run.py` | runs commands on a Kaggle GPU (or CPU) notebook with datasets attached, downloads outputs |
 | `bench/` | benchmark sets (never trained on) + `results.jsonl` of every evaluation |
 | `tests/` | `python -m pytest -q tests` |
-| `PLAN.md` | roadmap + measurements. Keep it updated as steps finish. |
+| `PLAN.md` | goals, experiment protocol, data/compute inventory, lessons, roadmap. Keep it updated as steps finish. |
 
 ## Conventions
 
