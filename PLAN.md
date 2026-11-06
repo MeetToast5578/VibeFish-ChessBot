@@ -42,7 +42,8 @@ Performance rating on our scale: v1 ≈ 975, v2 ≈ 1350–1400.
   - `bench/puzzles.csv`: 1,050 Lichess puzzles, 150 per rating band.
   - `bench/heldout.pkl`: 1,000 positions, every move graded by SF 17.1 at depth 12.
   - Matches vs SF `UCI_Elo` 1320 / 1600 / 2000 (and random), 120 games each, paired openings.
-  - *New:* ChessBench's 10k test puzzles, so we can compare with the DeepMind paper directly.
+  - *New:* the DeepMind paper's 10k Lichess test puzzles (evaluation only), so we can compare
+    with the paper directly.
 - **Rules:**
   - Compare candidates at **equal GPU time**.
   - A change ships only if it wins **120-game matches**. Held-out loss alone never decides
@@ -79,13 +80,11 @@ Performance rating on our scale: v1 ≈ 975, v2 ≈ 1350–1400.
 | D1, D2 | 154k | self-play (DAgger) with move history, every move, depth 8 |
 | heldout | 1,000 | every move, depth 12 (benchmark, never train) |
 
-**ChessBench** (DeepMind, `google-deepmind/searchless_chess`; data CC0 / CC-BY 4.0):
-- 10M Lichess games, ~530M positions, **15.3 billion** action values: every legal move graded by
-  Stockfish 16 at 50 ms per move.
-- Action-value training data: 2,148 shards, ~1.1 TB in total (~0.5 GB and roughly 250k
-  positions per shard). Stored in `.bag` files (their `bagz.py` reader).
-- Also: state-value and best-move sets (~35 GB each), a test set, 10k test puzzles, and
-  pretrained 9M / 136M / 270M checkpoints (CC-BY 4.0).
+**ChessBench** (DeepMind, `google-deepmind/searchless_chess`): **not used for training.** Its
+move grades and the model weights are CC-BY 4.0, so using them would mean crediting DeepMind, and
+every part of VibeFish should be our own (see "Ruled out"). For reference: 15.3 billion
+every-move grades (SF16, 50 ms per move), ~1.1 TB, plus pretrained 9M / 136M / 270M checkpoints,
+which we only play against (item 20).
 
 ## What we learned (keep these)
 
@@ -125,7 +124,7 @@ What we take from it:
   a rule) and all mates = 100% (they let Stockfish pick the move when winning). VibeFish solves
   both inside the network.
 - **Our edge must be efficiency per example:** hand-made features, mate-aware labels,
-  self-play, plus as much ChessBench as the free GPU hours can absorb.
+  self-play, and as many of our own Stockfish labels as free CPU notebooks can grade.
 
 ## Roadmap
 
@@ -138,19 +137,19 @@ What we take from it:
 - [ ] Stage 2: fine-tune with S2 + D3
 - [ ] Benchmarks vs v2; ship v3 only if it wins the 120-game matches
 
-### v3.1: ChessBench, the biggest expected gain
+### v3.1: our own labels at scale, the biggest expected gain
 
-1. **Converter.** Read one action-value shard, check the record layout (FEN, move, win
-   probability), group records by position, and write our records `(fen, [], {uci: score})`.
-   Win probabilities convert back to the centipawn scale with the inverse Lichess curve.
-   ChessBench maps every mate to 100%, so mate distance is lost. Keep relying on our self-play
-   data (and later tablebases) for finishing games.
-2. **Run it on Kaggle CPU notebooks** (free, with internet). Each converts a block of shards into
-   our `.npz` format as notebook output; training jobs attach those outputs (`--kernel-source`).
-   Disk and output limits decide the block size (~20 GB of output per notebook).
-3. **Size the slice to the GPU budget.** At ~3,600 positions/s, a 6 h run sees ~80M positions.
-   About 50–100 shards (12–25M positions with every move graded) is the useful amount per run.
-4. **Train** v3 recipe + ChessBench at equal GPU time vs v3; also evaluate on ChessBench's 10k puzzles.
+Every label is ours: Lichess positions (CC0) graded by our own Stockfish runs.
+
+1. **Grading farm on Kaggle CPU notebooks** (free, no GPU quota). One notebook (4 cores,
+   ~34 positions/s per core at depth 8) grades ~5–6M positions, every move, in a 12 h session,
+   saved as notebook output; training jobs attach it (`--kernel-source`), as
+   `vibefish-grade-1` already does. Run as many in parallel as Kaggle allows (check the limit).
+2. **Positions:** Lichess eval DB and puzzle-dump positions plus self-play positions,
+   deduplicated, benchmark positions excluded.
+3. **Size to the GPU budget.** At ~3,600 positions/s, a 6 h run sees ~80M positions;
+   15–25M every-move-graded positions per run is the useful amount (fewer repeats, lesson 8).
+4. **Train** the v3 recipe + the new labels at equal GPU time vs v3.
 
 ### v3.2: network and loss
 
@@ -191,7 +190,8 @@ What we take from it:
 Their recipe is huge data with a generic model and generic training. Ours has to win on
 **efficiency per example**. Smolgen (6) and tablebases (12) are already above. What's new:
 
-20. **Head-to-head test harness.** Load their published 270M (and 9M/136M) checkpoints and play
+20. **Head-to-head test harness.** Load their published 270M (and 9M/136M) checkpoints (run
+    here as an opponent only, never shipped or trained on) and play
     120+ game matches VibeFish vs DeepMind, same time control, same rules, both searchless. Also
     run both on their 10k puzzles. This replaces cross-scale Elo guessing with a direct result,
     and it is the gate for every step below. Needs a JAX → inference wrapper and a CPU/GPU cost test.
@@ -206,24 +206,7 @@ Their recipe is huge data with a generic model and generic training. Ours has to
 23. **Deeper pass by reusing layers (recurrent depth).** Run the same block 2–4 times on the
     current position: more computation per move, no extra parameters, still no search.
     Also test whether running more loops at play time than in training helps.
-24. **Copy their 9M's arrangement and weights (weight transplant), then learn only from
-    Stockfish.** Their 9M is 8 layers × 256 wide, 8 heads, SwiGLU MLP ×4, post-norm, learned
-    positional encodings (paper, appendix A.2). That is v3's skeleton (8 × 256); v3 uses a GELU
-    MLP and pre-norm, hence 6.7M vs 9M params.
-    1. Switch our block to theirs (SwiGLU, their norm placement) behind a flag.
-    2. Convert their 9M checkpoint and load its 8 transformer blocks into ours. Keep our own
-       embeddings and heads: their input is 77 FEN characters in white's frame, ours is 68 feature
-       tokens in the mover's frame. Map their per-square positional embeddings onto our square
-       order as a starting point.
-    3. Train only on our Stockfish labels and self-play, never on their outputs.
-    4. Test vs from-scratch at equal GPU time: held-out curves, then matches. A head start counts
-       most when compute is short, which is our case. It may also fade with enough training.
-
-    Only the 9M fits our 10M cap; the 136M/270M weights can't be copied in. CC-BY 4.0: credit
-    DeepMind in the README if a shipped model starts from their weights. Shares the checkpoint
-    converter with item 20.
-
-Stages: v3 → ~1,700–1,900 (estimate); v3.1–v3.2 + items 21, 22, 24 → aim at their 9M (~2025);
+Stages: v3 → ~1,700–1,900 (estimate); v3.1–v3.2 + items 21–22 → aim at their 9M (~2025);
 v4 + item 23 and more self-play → head-to-head vs their 136M, then 270M.
 
 ### GPU budget (30 h/week)
@@ -235,7 +218,7 @@ v4 + item 23 and more self-play → head-to-head vs their 136M, then 270M.
 | sweeps (depth, architecture), ~1–2 h each | 4–8 |
 | reserve (crashes, reruns) | ~5 |
 
-CPU work (Stockfish grading, self-play, ChessBench conversion, evaluation) runs on Kaggle CPU
+CPU work (Stockfish grading, self-play, evaluation) runs on Kaggle CPU
 notebooks and this machine, never on the GPU clock.
 
 ## Ruled out
@@ -243,9 +226,11 @@ notebooks and this machine, never on the GPU clock.
 - **Opening book** and **tablebase probing at play time**: not search, but not the network either.
 - Anything that evaluates positions after a candidate move (1-ply lookahead, MCTS, alpha-beta).
 - Training on the benchmark sets (`bench/exclude.txt` keeps puzzle positions out of training data).
-- **DeepMind's models as a teacher** (training on their outputs or labels they produce): owner's
-  call, a searchless teacher can't beat Stockfish labels. Their models are used only as an
-  opponent/benchmark (item 20) and as a weight starting point (item 24).
+- **Anything DeepMind made, except as an opponent** (owner's call): their models as a teacher
+  (a searchless teacher can't beat Stockfish labels), their weights as a starting point, and
+  ChessBench's move grades (CC-BY 4.0 would mean crediting them; every part of VibeFish should
+  be our own). Their models are only played against (item 20), and their 10k Lichess test
+  puzzles are used for evaluation only.
 
 ## History
 
