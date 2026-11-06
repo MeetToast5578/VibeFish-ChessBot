@@ -1,5 +1,6 @@
 __pycache__/
-run/data_round*.pkl
-run/eval.pkl
 Stockfish/
 *.log
+data
+data/
+runs/

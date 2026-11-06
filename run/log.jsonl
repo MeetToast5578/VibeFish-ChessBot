@@ -1,5 +1,0 @@
-{"round": 0, "beta": 1.0, "positions": 17447, "live_wp_lost": null, "top1": 0.206, "wp_lost": 0.0787, "value_mae": 0.1623, "minutes": 7.1}
-{"round": 1, "beta": 0.5, "positions": 32386, "live_wp_lost": 0.06053749180931575, "top1": 0.221, "wp_lost": 0.0771, "value_mae": 0.1279, "minutes": 7.6}
-{"round": 2, "beta": 0.4, "positions": 47175, "live_wp_lost": 0.06317430969594458, "top1": 0.228, "wp_lost": 0.0749, "value_mae": 0.1164, "minutes": 8.8}
-{"round": 3, "beta": 0.3, "positions": 63849, "live_wp_lost": 0.057851996855202086, "top1": 0.225, "wp_lost": 0.0727, "value_mae": 0.1058, "minutes": 10.7}
-{"round": 4, "beta": 0.19999999999999996, "positions": 79538, "live_wp_lost": 0.06947862932583268, "top1": 0.248, "wp_lost": 0.0719, "value_mae": 0.0974, "minutes": 11.4}
