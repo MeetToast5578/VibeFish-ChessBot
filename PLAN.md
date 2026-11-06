@@ -10,7 +10,8 @@ A **small, searchless** chess bot.
   current position (a deeper pass, item 23) is allowed: it never looks at any other position.
 - **Network only:** no opening book and no tablebase probing at play time. Books, tablebases and
   Stockfish may be used to make *training labels*.
-- **Compact:** ≤ 10M parameters and ≤ 20 MB shipped (≤ 5 MB with int8 is the stretch goal).
+- **Compact:** ≤ 14M parameters and ≤ 30 MB shipped (≤ 5 MB with int8 is the stretch goal). The owner
+  raised the cap from 10M for v4 ("bigger but not too big"); older notes below still say 10M.
 
 Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 
