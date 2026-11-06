@@ -135,6 +135,7 @@ without AMX) and ~34 positions/s/core for Stockfish grading every move at depth 
 | `play.py` | terminal play and UCI mode |
 | `models/vibefish_v3.pt` | the v3 weights (fp16, 13.4 MB) |
 | `models/vibefish_v2.pt` | the v2 weights (fp16, ~6 MB) |
+| `models/vibefish_v3_stage1.pt`, `vibefish_v3_1_control.pt`, `vibefish_v3_1_cb.pt` | not shipped, kept for comparison: v3 stage 1, and the v3.1 fine-tunes without / with ChessBench (both even with v3) |
 | `models/v1/` | VibeFish v1: its own `model.py` (different architecture) and weights (3.5 MB) |
 | `bench/` | benchmark sets, `results.jsonl` with every evaluation run, training logs |
 | `games/` | match games vs Stockfish and the v1 / v2 / v3 round-robin |

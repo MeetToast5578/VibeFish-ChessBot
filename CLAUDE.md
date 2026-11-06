@@ -40,7 +40,8 @@ Strength must come from data, features, losses and training.
 - Never run Stockfish/data jobs next to a training run: one busy core halves 4-thread PyTorch.
 - Every input feature must be exercised by training data. Lichess/puzzle positions have no move
   history, so history features are only learned from DAgger games (see PLAN.md log).
-- Big files (`data/`, Lichess dumps) are gitignored. Only final weights go in `models/`.
+- Big files (`data/`, Lichess dumps) are gitignored. **Every trained model is kept in `models/`** (owner's rule), shipped or not, named
+  `vibefish_<run>.pt`, so it can be recalled later. GitHub's limit is 100 MB per file.
 - Kaggle (user `yunus0901`): the API token is injected by the session's network proxy, never stored
   locally (`~/.kaggle/access_token` is a placeholder). Kaggle CLI 2.x checks the token by sending it
   in a request body, which the proxy can't fill, so the venv's `kaggle` entry point patches
