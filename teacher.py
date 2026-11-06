@@ -9,16 +9,18 @@ import torch
 
 STOCKFISH = os.environ.get("STOCKFISH", "stockfish")  # path to a Stockfish binary
 MATE = 100_000   # mate in n for side to move -> MATE - n; getting mated in n -> -MATE + n
+UNKNOWN = -2**31  # best move known, score not (ChessBench best-move records): policy target only
 
 
 def to_grade(s):
     """Raw score(s) -> grade(s). cp -> Lichess win-prob curve; mate in n -> 1 + 0.2/n (shorter is
-    better); mated in n -> -0.2/n. Works on ints or numpy arrays."""
+    better); mated in n -> -0.2/n; UNKNOWN -> nan. Works on ints or numpy arrays."""
     s = np.asarray(s, dtype=np.float64)
     wp = 1 / (1 + np.exp(-0.00368208 * np.clip(s, -5000, 5000)))
     win = 1 + 0.2 / np.maximum(MATE - s, 1)
     loss = -0.2 / np.maximum(s + MATE, 1)
-    return np.where(s >= MATE - 1000, win, np.where(s <= -MATE + 1000, loss, wp))
+    g = np.where(s >= MATE - 1000, win, np.where(s <= -MATE + 1000, loss, wp))
+    return np.where(s == UNKNOWN, np.nan, g)
 
 
 class Engine:

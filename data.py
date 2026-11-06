@@ -6,6 +6,7 @@ which are pickled (reusable if the encoding changes) and encoded into .npz shard
   python data.py sf      --src data/eval_part.zst --start 20000 --count 300000 --depth 8 --out data/S
   python data.py sf      --src data/eval_part.zst --start 0 --count 1000 --depth 12 --out data/heldout
   python data.py dagger  --model models/vibefish_v2.pt --games 2000 --depth 8 --out data/D1
+  python data.py chessbench --src CB_BC --start 0 --count 20000000 --exclude bench/exclude.txt,bench/heldout_fens.txt --out data/CB
 """
 import argparse
 import io
@@ -14,6 +15,8 @@ import json
 import multiprocessing as mp
 import os
 import pickle
+import struct
+import urllib.request
 
 import chess
 import numpy as np
@@ -22,6 +25,8 @@ import teacher
 from model import encode, orient_move, SEQ, NF
 
 EVAL_LINES = 20_000   # the first lines of the Lichess eval file are reserved for held-out evaluation
+# ChessBench (DeepMind, CC-BY 4.0): 527M Lichess positions with Stockfish 16's best move (50 ms/move)
+CB_BC = "https://storage.googleapis.com/searchless_chess/data/train/behavioral_cloning_data.bag"
 
 
 def lichess_lines(path, start, count):
@@ -71,7 +76,7 @@ _kmax = 96
 
 def _init_exclude(path, kmax=96):
     global _exclude, _kmax
-    _exclude = set(open(path).read().split("\n")) if path else set()
+    _exclude = set().union(*(open(f).read().split("\n") for f in path.split(","))) if path else set()
     _kmax = kmax
 
 
@@ -115,6 +120,73 @@ def cmd_lichess(a):
     shard, buf = 0, []
     with mp.Pool(a.workers, _init_exclude, (a.exclude, a.kmax)) as pool:
         for enc in pool.imap(_encode_lines, chunks(lichess_lines(a.src, a.start, a.count), 2000)):
+            buf += enc
+            if len(buf) >= a.shard_size:
+                to_shard(buf, f"{a.out}_{shard:02d}.npz"); shard += 1; buf = []
+    if buf:
+        to_shard(buf, f"{a.out}_{shard:02d}.npz")
+
+
+def read_range(src, a, b):
+    """Bytes [a, b) of a local file or an http(s) URL (range request)."""
+    if src.startswith("http"):
+        req = urllib.request.Request(src, headers={"Range": f"bytes={a}-{b - 1}"})
+        for attempt in range(5):
+            try:
+                data = urllib.request.urlopen(req, timeout=120).read()
+                assert len(data) == b - a, "short read"
+                return data
+            except Exception:
+                if attempt == 4:
+                    raise
+    with open(src, "rb") as f:
+        f.seek(a)
+        return f.read(b - a)
+
+
+def bag_records(src, start, count, block=500_000):
+    """Raw records start..start+count of a Bagz file (DeepMind's format: records back to back, then
+    one little-endian int64 end offset per record, then the offset of that index)."""
+    size = (int(urllib.request.urlopen(urllib.request.Request(src, method="HEAD")).headers["Content-Length"])
+            if src.startswith("http") else os.path.getsize(src))
+    (index,) = struct.unpack("<Q", read_range(src, size - 8, size))
+    n = (size - 8 - index) // 8 + 1   # the last index entry doubles as the index offset
+    for lo in range(start, min(start + count, n), block):
+        hi = min(lo + block, start + count, n)
+        ends = np.frombuffer(read_range(src, index + 8 * lo, index + 8 * hi), "<i8")
+        first = struct.unpack("<q", read_range(src, index + 8 * (lo - 1), index + 8 * lo))[0] if lo else 0
+        data = read_range(src, first, int(ends[-1]))
+        starts = np.concatenate([[first], ends[:-1]]) - first
+        for a, b in zip(starts, ends - first):
+            yield data[a:b]
+
+
+def parse_bc(rec):
+    """ChessBench behavioral-cloning record (Beam tuple: varint length + utf-8 FEN, then the move as
+    the rest of the record; the last field has no length) -> our record, best move's score unknown."""
+    n = shift = i = 0
+    while True:
+        c = rec[i]; i += 1
+        n |= (c & 127) << shift; shift += 7
+        if c < 128:
+            break
+    return rec[i:i + n].decode(), [], {rec[i + n:].decode(): teacher.UNKNOWN}
+
+
+def _encode_bc(recs):
+    out = []
+    for r in recs:
+        rec = parse_bc(r)
+        if " ".join(rec[0].split()[:4]) not in _exclude:
+            out.append(encode_record(rec))
+    return out
+
+
+def cmd_chessbench(a):
+    shard, buf = 0, []
+    src = CB_BC if a.src == "CB_BC" else a.src
+    with mp.Pool(a.workers, _init_exclude, (a.exclude,)) as pool:
+        for enc in pool.imap(_encode_bc, chunks(bag_records(src, a.start, a.count), 5000)):
             buf += enc
             if len(buf) >= a.shard_size:
                 to_shard(buf, f"{a.out}_{shard:02d}.npz"); shard += 1; buf = []
@@ -196,8 +268,8 @@ def cmd_puzzles(a):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("cmd", choices=["lichess", "sf", "dagger", "puzzles"])
-    p.add_argument("--exclude", help="file of FENs (first 4 fields) to skip")
+    p.add_argument("cmd", choices=["lichess", "sf", "dagger", "puzzles", "chessbench"])
+    p.add_argument("--exclude", help="comma list of files of FENs (first 4 fields) to skip")
     p.add_argument("--kmax", type=int, default=96, help="lichess: keep at most this many (best) moves per position")
     p.add_argument("--src", default="data/eval_part.zst")
     p.add_argument("--start", type=int, default=EVAL_LINES)
@@ -212,4 +284,5 @@ if __name__ == "__main__":
     p.add_argument("--workers", type=int, default=os.cpu_count())
     p.add_argument("--out")
     a = p.parse_args()
-    {"lichess": cmd_lichess, "sf": cmd_sf, "dagger": cmd_dagger, "puzzles": cmd_puzzles}[a.cmd](a)
+    {"lichess": cmd_lichess, "sf": cmd_sf, "dagger": cmd_dagger, "puzzles": cmd_puzzles,
+     "chessbench": cmd_chessbench}[a.cmd](a)

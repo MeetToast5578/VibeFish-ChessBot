@@ -83,3 +83,15 @@ def test_head_to_head_game_uses_both_players():
     assert pts in (0.0, 0.5, 1.0)
     assert board.is_game_over(claim_draw=True) or board.ply() >= 400
     assert seen["me"] > 0 and seen["opp"] > 0
+
+
+def test_chessbench_bag_reader_and_best_move_records(tmp_path):
+    fens = ["rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1", chess.STARTING_FEN]
+    recs = [bytes([len(f)]) + f.encode() + m.encode() for f, m in zip(fens, ["e7e5", "g1f3"])]
+    ends = np.cumsum([len(r) for r in recs])
+    path = tmp_path / "x.bag"
+    path.write_bytes(b"".join(recs) + ends.astype("<i8").tobytes())
+    got = [data.parse_bc(r) for r in data.bag_records(str(path), 0, 10)]
+    assert got == [(f, [], {m: teacher.UNKNOWN}) for f, m in zip(fens, ["e7e5", "g1f3"])]
+    assert [data.parse_bc(r)[0] for r in data.bag_records(str(path), 1, 1)] == fens[1:]
+    assert np.isnan(teacher.to_grade(teacher.UNKNOWN)) and teacher.to_grade(0) == 0.5

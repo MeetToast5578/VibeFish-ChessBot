@@ -84,15 +84,18 @@ def losses(model, batch):
     mask = idx >= 0
     gi = idx.clamp(min=0)
     policy, action, value = model(x)
+    known = mask & ~g.isnan()   # nan = best move without a score: a record's only move, so a one-hot policy target
+    g = g.nan_to_num(0.0)
     target = F.softmax((g / args.tau).masked_fill(~mask, -1e9), -1)
     logp = F.log_softmax(policy, -1).gather(1, gi)
     pol = -(target * logp).masked_fill(~mask, 0).sum(-1).mean()
     wp = g.clamp(0, 1)
     act = F.binary_cross_entropy_with_logits(action.gather(1, gi), wp, reduction="none")
-    act = act.masked_fill(~mask, 0).sum() / mask.sum()
-    best = wp.masked_fill(~mask, -1).max(-1).values
+    act = act.masked_fill(~known, 0).sum() / known.sum().clamp(min=1)
+    best = wp.masked_fill(~known, -1).max(-1).values
+    has = known.any(-1)
     v = value.float().clamp(1e-6, 1 - 1e-6)   # hand-written BCE: F.binary_cross_entropy refuses to run under CUDA autocast
-    val = -(best * v.log() + (1 - best) * (1 - v).log()).mean()
+    val = (-(best * v.log() + (1 - best) * (1 - v).log()) * has).sum() / has.sum().clamp(min=1)
     return pol, act, val, (policy, action, value)
 
 
