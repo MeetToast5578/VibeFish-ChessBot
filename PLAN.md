@@ -10,7 +10,8 @@ A **small, searchless** chess bot.
   current position (a deeper pass, item 23) is allowed: it never looks at any other position.
 - **Network only:** no opening book and no tablebase probing at play time. Books, tablebases and
   Stockfish may be used to make *training labels*.
-- **Compact:** ≤ 10M parameters and ≤ 20 MB shipped (≤ 5 MB with int8 is the stretch goal).
+- **Compact:** ≤ 14M parameters and ≤ 30 MB shipped (≤ 5 MB with int8 is the stretch goal). The owner
+  raised the cap from 10M for v4 ("bigger but not too big"); older notes below still say 10M.
 
 Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 
@@ -37,6 +38,10 @@ Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 | round-robin (100 games/pair) | 18% vs v2, 4.5% vs v3 | 82% vs v1, 8% vs v3 | 95.5% vs v1, 92% vs v2 |
 
 Performance rating on our scale: v1 ≈ 975, v2 ≈ 1350–1650, v3 ≈ 1740–1990 (1991 vs SF 2000).
+
+Time-control check: `UCI_Elo` is calibrated at 60s+0.6s, our matches use 0.1 s/move. v3 vs SF 2000
+at **1.0 s/move**, two 60-game runs: +23 =17 −20 (52.5%, perf 2017) and +22 =16 −22 (50.0%), vs 48.7%
+at 0.1 s. No inflation, so the 0.1 s figures stand (`games/v3_vs_sf2000_1s.pgn`, `_run2.pgn`).
 
 ## How we decide (experiment protocol)
 
@@ -166,11 +171,20 @@ instead: 527M positions, each with Stockfish 16's best move (50 ms/move).
       records with an UNKNOWN score: a one-hot policy target, skipped by the value and
       action-value losses. Benchmark puzzle positions and held-out positions
       (`bench/heldout_fens.txt`) are excluded. ~4k positions/s on 4 cores, ~480 B/position.
-- [ ] Kaggle CPU notebooks `vibefish-cb-1` / `-2`: positions 0–20M and 20–40M.
-- [ ] Equal-GPU-time test, both from v3, 4 h, lr 2e-4, same data otherwise: `vibefish-v31-control`
+- [x] Kaggle CPU notebooks `vibefish-cb-1` / `-2`: positions 0–20M and 20–40M.
+- [x] Equal-GPU-time test, both from v3, 4 h, lr 2e-4, same data otherwise: `vibefish-v31-control`
       (L 25%, L2_00–09 35%, S2_a–h 20%, D3 12%, S/D1/D2 8%) vs `vibefish-v31-cb` (CB1 35%,
       L 10%, L2_00–09 15%, rest the same). L2 is halved in both so CB fits in the 29 GB of RAM.
-- [ ] Matches vs v3 (head-to-head and SF 2000); ship the winner if it beats v3.
+- [x] Matches vs v3. **Neither ships**; both kept in `models/`:
+
+      | | held-out wp lost / top1 | puzzles | vs v3 (100 g) | SF 2000 (120 g) |
+      |---|---|---|---|---|
+      | v3 | 0.028 / 52.2% | 59.3% | – | 48.7% |
+      | v3.1 control | 0.0252 / 52.9% | 58.8% | 50.5% | 46.7% |
+      | v3.1 ChessBench | 0.0243 / 54.3% | 59.1% | 50.0% | 47.5% |
+
+      Lesson: at 6.7M params v3 is saturated. More data (even 18M new ChessBench positions)
+      improves held-out accuracy a little but not play. Capacity is the limit, so v4 goes bigger.
 
 Original plan:
 

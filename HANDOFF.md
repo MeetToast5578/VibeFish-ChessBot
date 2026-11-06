@@ -15,16 +15,17 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   - ChessBench shards on Kaggle: `vibefish-cb-1` (CB1_00–19, 20M) and `vibefish-cb-2` (positions
     20–40M) are both complete. cb-2 is unused so far. (`kaggle kernels output` lists sizes as
     "822"; the real files are ~484 MB each, per the kernel log.)
-- **Evaluation check (in progress):** Stockfish's `UCI_Elo` is calibrated at 60s+0.6s, but our
+- **Evaluation check (done):** Stockfish's `UCI_Elo` is calibrated at 60s+0.6s, but our
   matches gave it 0.1 s/move, so our perf Elo numbers might have been inflated. Checked with
   `evaluate.py --movetime 1.0`: v3 vs SF 2000 at 1 s/move scored **50.0%** (+22 =16 −22, 60 games,
-  `games/v3_vs_sf2000_1s.pgn`) vs 48.7% at 0.1 s. Stockfish's limited strength barely changes with
+  `games/v3_vs_sf2000_1s_run2.pgn`) and, in a second session's run, **52.5%** (+23 =17 −20,
+  `games/v3_vs_sf2000_1s.pgn`), vs 48.7% at 0.1 s. Stockfish's limited strength barely changes with
   more time, so the 0.1 s numbers stand (still on Stockfish's scale, not Lichess/FIDE). The owner's "v3 plays a lot of h4" worry was checked: early h4/...h5
   appears in 19% of v3's games vs 21–30% for Stockfish 1320–2000 in the same matches, so not a bug.
 
 ## Next steps, in order
 
-1. **Benchmark the ChessBench run** (same as the control, ~5 min locally):
+1. ~~Benchmark the ChessBench run~~ done, not shipped (50% vs v3, 47.5% vs SF 2000; PLAN v3.1). Commands used:
    ```bash
    kaggle kernels output yunus0901/vibefish-v31-cb -p kaggle_out/vibefish-v31-cb --file-pattern '(runs/|\.log$)'
    ```
@@ -38,33 +39,26 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
    copy to `models/vibefish_v3_1.pt`, update the `play.py`/`evaluate.py` defaults, README and the
    credit line "Trained in part on ChessBench (DeepMind, CC-BY 4.0)". Either way, record the result
    in PLAN.md (v3.1 section) and copy its `log.jsonl` to `bench/train_logs/v31_cb.jsonl`.
-2. **v4** (owner's direction: bigger, deeper, loop through the layers; v3 isn't strong enough).
+2. ~~Time-control check~~ done: v3 vs SF 2000 at 1 s/move, two 60-game runs: 52.5% and 50.0% (48.7% at 0.1 s). Elo figures stand.
+3. **v4** (owner's direction: bigger and deeper, ≤ 14M; v3 isn't strong enough).
 
-## v4 plan (agreed in chat, not started)
+## v4 plan (agreed in chat; model code done, pilots not started)
 
-Owner's rules still hold: ≤ 10M params, one forward pass per move, no search; DeepMind models only
-as opponents, ChessBench data allowed with credit.
+Owner's rules: **≤ 14M params** (raised from 10M for v4: "bigger but not too big"), one forward
+pass per move, no search; DeepMind models only as opponents, ChessBench data allowed with credit.
 
-- **Architecture** (same width d=256 so v3's weights can seed it):
-  - **11 layers** instead of 8: ~9.4M params incl. the bias below (d=320 would exceed 10M).
-  - **Loops:** run the layer stack 2× with shared weights, plus a learned per-pass offset
-    (`loop_emb`). Effective depth 22, no extra params. Still one forward pass.
-  - **Square-pair attention bias** (PLAN item 6, a light "smolgen"): a learned
-    `[layers, heads, 68, 68]` additive bias (~0.4M params), passed as `src_mask` per layer.
-    Needs `nn.TransformerEncoder`'s layers called one by one. Check it works under CUDA fp16
-    autocast (float mask vs fp16 query) before a long run.
-  - A first draft of these `model.py` changes was written and then set aside, untested. Keep
-    `cfg` backwards compatible (new keys with defaults) so v1–v3 checkpoints still load.
-- **Initialise from v3 ("depth up-scaling"):** copy v3's 8 layers, add 3 layers with `out_proj`
-  and `linear2` zeroed (identity under pre-norm), zero bias, zero `loop_emb`. Needs a `train.py`
-  path that loads a checkpoint into a bigger config (`strict=False` on matching keys). Note the
-  second loop pass is not an identity at init; training has to adapt.
-- **Test before the long run:** two ~2 h pilots in parallel on Kaggle, both from grown v3:
-  A = 11 layers + bias, 1 loop; B = same with 2 loops. Compare held-out and head-to-head vs v3.
-  Looping is the unproven part (helps in some research, not others); more params reliably help.
-- **Main run:** the pilot winner, 8–10 h. Expect ~2.75× slower per position than v3 with 2 loops
-  (~20M positions per 4 h instead of 53M), so the data fits in the 29 GB of RAM; memmap loading
-  isn't needed yet. Use ChessBench (CB1 + cb-2's CB2) in the mix if the v3.1 CB run helped.
+- **Architecture** (same width d=256 so v3's weights seed it): **16 layers** instead of 8, plus
+  the **square-pair attention bias** (`[layers, heads, 68, 68]`, PLAN item 6). 13.6M params with
+  the bias, ~27 MB at fp16. **Loops dropped:** with params allowed, 2 passes through N layers cost
+  as much as 2N real layers with half the weights. The code still supports `--loops`.
+- **Code (done, PR #18):** `ChessGPT(loops=, bias=)`, `model.grow`, `train.py --init ... --grow
+  --layers 16 --attn-bias`. Added layers start as identity, so grown-from-v3 plays exactly like v3
+  (tested). The bias is cast to the query dtype for fp16 autocast. Untested on GPU so far.
+- **Pilots (~2 h each, in parallel on Kaggle, both grown from v3):** A = 16 layers + bias,
+  B = 16 layers, no bias. Compare held-out and head-to-head vs v3. Same mix as the v3.1 winner.
+- **Main run:** continue the pilot winner (`--init` its model.pt, no `--grow`) for 8–10 h. Expect
+  ~2× slower per position than v3 (~1,800 pos/s on 2×T4, ~65M positions per 10 h). Use
+  ChessBench (CB1 + cb-2's CB2) in the mix if the v3.1 CB run helped.
 - **Budget:** 30 GPU h/week on Kaggle; the v3.1 runs used ~8 h this week.
 - **Gate:** ship v4 only if it beats v3 (or v3.1) head-to-head and against Stockfish.
 
