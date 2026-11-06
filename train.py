@@ -82,7 +82,8 @@ def losses(model, batch):
     act = F.binary_cross_entropy_with_logits(action.gather(1, gi), wp, reduction="none")
     act = act.masked_fill(~mask, 0).sum() / mask.sum()
     best = wp.masked_fill(~mask, -1).max(-1).values
-    val = F.binary_cross_entropy(value.clamp(1e-6, 1 - 1e-6), best)
+    v = value.float().clamp(1e-6, 1 - 1e-6)   # hand-written BCE: F.binary_cross_entropy refuses to run under CUDA autocast
+    val = -(best * v.log() + (1 - best) * (1 - v).log()).mean()
     return pol, act, val, (policy, action, value)
 
 
@@ -122,6 +123,8 @@ def main():
     counts = [round(args.batch * s.weight / total_w) for s in sources]
     hx, hi, hs = load_shard(args.heldout)
     dev = torch.device(args.device)
+    amp = torch.bfloat16 if dev.type == "cuda" and torch.cuda.is_bf16_supported() else torch.float16   # T4/P100: no bf16
+    scaler = torch.amp.GradScaler("cuda", enabled=dev.type == "cuda" and amp == torch.float16)
     held = [t.to(dev) for t in to_batch([(hx, hi, hs)])]
 
     model = (load(args.init).train() if args.init else ChessGPT(args.d, args.layers, args.heads)).to(dev)
@@ -139,13 +142,15 @@ def main():
         for gr in opt.param_groups:
             gr["lr"] = lr
         batch = [t.to(dev, non_blocking=True) for t in to_batch([s.take(n) for s, n in zip(sources, counts) if n])]
-        with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev.type == "cuda"):   # bf16 is fast on GPUs (not on this CPU)
+        with torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda"):   # mixed precision on GPUs only (slower on this CPU)
             pol, act, val, _ = losses(model, batch)
         loss = pol + args.w_action * act + args.w_value * val
         opt.zero_grad(set_to_none=True)
-        loss.backward()
+        scaler.scale(loss).backward()
+        scaler.unscale_(opt)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        opt.step()
+        scaler.step(opt)
+        scaler.update()
         step += 1
         seen += len(batch[0])
         run = 0.98 * run + 0.02 * np.array([pol.item(), act.item(), val.item()])

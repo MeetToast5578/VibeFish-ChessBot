@@ -178,10 +178,24 @@ total. A single modern GPU should train the same net one to two orders of magnit
    differences of ~50 Elo are visible. Optional: run it as a Lichess bot through `play.py --uci`
    for a human-comparable rating.
 
-### What's needed from the GPU machine
+### Which GPU
 
-GPU model and VRAM, number of CPU cores (Stockfish grading), and disk space (the full Lichess
-DB plus encoded shards is on the order of 150+ GB; ChessBench is much larger, so take a slice).
+The available machine is a laptop with **Intel Iris Xe** integrated graphics. That is not enough
+for this plan: it shares system RAM, PyTorch reaches it only through the separate XPU backend
+(official support for Iris Xe is uncertain), and at best it would be a few times faster than
+the CPU. `--device xpu` can be tried, but it's not worth building on.
+
+Plan instead:
+- **Training on a free cloud NVIDIA GPU**: Kaggle notebooks (weekly GPU quota) or Google Colab
+  (T4). `train.py` picks CUDA automatically: bf16 on Ampere or newer, fp16 + loss scaling on
+  T4/P100.
+- **The laptop's CPU cores for Stockfish grading** (`data.py sf` / `data.py dagger`), copying
+  the shards to the training machine. Grading and training on separate machines also avoids
+  the contention problem from v2.
+- Free notebooks have limited disk and session time, so start with a slice of the data that
+  fits (e.g. the 6M v2 positions plus new DAgger games), and checkpoint often.
+
+Needed to size it: the laptop's CPU core count, and which notebook service you'll use.
 
 ## Ideas parked (only if time remains)
 
