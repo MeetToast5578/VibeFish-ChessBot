@@ -128,13 +128,60 @@ vs SF 2000 +3 =22 −95 (120 games each). v1 on the same 120-game tests: random 
 SF 1320 +3 =23 −94. Policy-only beat the policy+action-value mix in games (pooled 0.31 vs 0.25 at
 SF 1600) and on puzzles, so play uses the policy head alone.
 
-## Next (v3 ideas, in order of expected value per CPU hour)
+## VibeFish v3 plan (with a GPU)
 
-1. More DAgger rounds, run at full width (not next to training): on-policy data was the
-   single most useful source per position.
-2. More middlegame positions with every move graded (puzzle-dump games, not just puzzle positions).
-3. Longer training. Held-out loss was still falling at the end of the run.
-4. Look into the draws against the random mover (stalemates? repetitions?).
+Goal: keep the shipped bot small (≤ ~10M params, ≤ 20 MB, one forward pass per move) and gain
+another few hundred Elo. Stretch: score 50% against SF `UCI_Elo` 2000 (v2: 12%).
+
+### What a GPU changes
+
+v2 was limited by **training compute**: ~200 positions/s on 4 CPU cores, 2M positions seen in
+total. A single modern GPU should train the same net one to two orders of magnitude faster
+(estimate; step 0 measures it). Then the bottlenecks move:
+
+| bottleneck | why | plan |
+|---|---|---|
+| labelled data | 6M Lichess positions would be used up in minutes | full Lichess eval DB (~290M positions) + DeepMind's ChessBench |
+| Stockfish grading | CPU only, ~34 positions/s/core at depth 8 | grade on every spare CPU core, *not* next to training; later let a big GPU teacher label instead |
+| Python encoding | `encode()` takes 0.35 ms/position, single-threaded | encode once, in parallel, into shards; vectorise with numpy bitboards if it's still too slow |
+| RAM | `train.Source` loads every shard (~480 B/position) | stream shards from disk (memmap) instead |
+
+### Steps
+
+0. **GPU smoke test.** `train.py` now picks CUDA automatically and trains in bf16 there
+   (untested on a real GPU so far). Run 10 minutes of the v2 recipe, record positions/s and
+   GPU utilisation. If utilisation is low, the CPU-side batch building is the bottleneck: move
+   `to_grade` / padding to the GPU or use a DataLoader with worker processes.
+1. **Streaming data loader.** memmap shards, sampled shard by shard, so hundreds of millions of
+   positions fit on disk instead of in RAM.
+2. **Data scale-up.**
+   - Encode the whole Lichess eval DB (22.5 GB compressed) with `data.py lichess` on all cores.
+   - Add DeepMind's ChessBench (`google-deepmind/searchless_chess`): positions from real Lichess
+     games with *every* legal move graded by Stockfish. That's exactly our "all moves graded" data
+     at a far larger scale, and it is middlegame-heavy, which fixes our endgame skew. Check the
+     dataset's licence and size first; a slice is enough to start.
+   - Neither source has move history, so the DAgger games remain the only teacher for the
+     history features (lesson from v2).
+3. **Scaling sweep at fixed GPU time** (e.g. 2 h each): d=192/6L (v2, 2.9M), d=256/8L (~6M),
+   d=384/8L (~14M). Pick using puzzles and 120-game matches, not held-out loss alone (v2's
+   held-out loss looked fine while games were broken).
+4. **DAgger at scale.** Several rounds: the current model plays thousands of games, Stockfish
+   grades every position (with history), then fine-tune. Run generation on CPU cores that the
+   training job doesn't use. Try depth 10–12 labels for the late rounds.
+5. **Teacher → student (optional, biggest upside).** Train a large teacher (50–100M params) on
+   the same data, then distil it into the small shipped model. The teacher can label millions of
+   self-play positions per hour on the GPU, which removes the Stockfish bottleneck for the
+   student. The shipped bot stays small and searchless.
+6. **Known weaknesses.** Analyse the 14/120 draws against the random mover; support
+   under-promotions; horizontal-flip augmentation for positions without castling rights.
+7. **Evaluation.** Same `bench/` sets, plus matches at SF 1600 / 2000 / 2400 with 240+ games so
+   differences of ~50 Elo are visible. Optional: run it as a Lichess bot through `play.py --uci`
+   for a human-comparable rating.
+
+### What's needed from the GPU machine
+
+GPU model and VRAM, number of CPU cores (Stockfish grading), and disk space (the full Lichess
+DB plus encoded shards is on the order of 150+ GB; ChessBench is much larger, so take a slice).
 
 ## Ideas parked (only if time remains)
 

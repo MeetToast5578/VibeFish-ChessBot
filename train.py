@@ -34,12 +34,14 @@ p.add_argument("--heads", type=int, default=4)
 p.add_argument("--init", help="start from this model file")
 p.add_argument("--eval-every", type=int, default=500)
 p.add_argument("--threads", type=int, default=4)
+p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
 p.add_argument("--out", required=True)
 args = p.parse_args()
 
 
 class Source:
-    """All shards matching a glob, sampled without replacement (reshuffled each pass)."""
+    """All shards matching a glob, sampled without replacement (reshuffled each pass).
+    shortcut: loads every shard into RAM (~480 B/position), switch to per-shard memmap streaming past ~20M positions."""
     def __init__(self, pattern, weight, rng):
         parts = [load_shard(f) for f in sorted(glob.glob(pattern))]
         assert parts, f"no shards match {pattern}"
@@ -119,9 +121,10 @@ def main():
     total_w = sum(s.weight for s in sources)
     counts = [round(args.batch * s.weight / total_w) for s in sources]
     hx, hi, hs = load_shard(args.heldout)
-    held = to_batch([(hx, hi, hs)])
+    dev = torch.device(args.device)
+    held = [t.to(dev) for t in to_batch([(hx, hi, hs)])]
 
-    model = load(args.init).train() if args.init else ChessGPT(args.d, args.layers, args.heads)
+    model = (load(args.init).train() if args.init else ChessGPT(args.d, args.layers, args.heads)).to(dev)
     print(f"params: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M  cfg {model.cfg}", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95))
     log = open(f"{args.out}/log.jsonl", "a")
@@ -135,8 +138,9 @@ def main():
         lr = args.lr * min(1, (step + 1) / args.warmup) * (0.05 + 0.95 * 0.5 * (1 + math.cos(math.pi * frac)))
         for gr in opt.param_groups:
             gr["lr"] = lr
-        batch = to_batch([s.take(n) for s, n in zip(sources, counts) if n])
-        pol, act, val, _ = losses(model, batch)
+        batch = [t.to(dev, non_blocking=True) for t in to_batch([s.take(n) for s, n in zip(sources, counts) if n])]
+        with torch.autocast("cuda", dtype=torch.bfloat16, enabled=dev.type == "cuda"):   # bf16 is fast on GPUs (not on this CPU)
+            pol, act, val, _ = losses(model, batch)
         loss = pol + args.w_action * act + args.w_value * val
         opt.zero_grad(set_to_none=True)
         loss.backward()
