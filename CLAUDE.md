@@ -33,10 +33,18 @@ Strength must come from data, features, losses and training.
 ## Environment
 
 - Python venv at `/home/user/venv` (system pip can't build `chess`). `. /home/user/venv/bin/activate`
-- Stockfish: `export STOCKFISH=/path/to/stockfish` (any modern NNUE build. v2 data used SF 17.1)
+- Stockfish: `export STOCKFISH=/path/to/stockfish` (any modern NNUE build. v2/v3 data used SF 17.1)
 - CPU only. bf16 autocast is *slower* here, and torch.compile needs a working g++ (cc1plus).
   Training ~320 pos/s for 0.8M params, ~130–220 pos/s for the 2.9M v2 model on 4 cores.
 - Never run Stockfish/data jobs next to a training run: one busy core halves 4-thread PyTorch.
 - Every input feature must be exercised by training data. Lichess/puzzle positions have no move
   history, so history features are only learned from DAgger games (see PLAN.md log).
 - Big files (`data/`, Lichess dumps) are gitignored. Only final weights go in `models/`.
+- Kaggle (user `yunus0901`): the API token is injected by the session's network proxy, never stored
+  locally (`~/.kaggle/access_token` is a placeholder). Kaggle CLI 2.x checks the token by sending it
+  in a request body, which the proxy can't fill, so the venv's `kaggle` entry point patches
+  `KaggleApi._introspect_token` to skip that check. Never print or commit tokens.
+- Kaggle hides a running kernel's logs and outputs; poll `kaggle kernels status`, then
+  `kaggle kernels output`. Sessions stop at 12 h, so keep CPU grading jobs to ≤ 4 h or split them.
+- Shipped model: `models/vibefish_v3.pt` (6.7M params, d=256, 8 layers). Compare new candidates
+  against it with `evaluate.py --vs models/vibefish_v3.pt` and the Stockfish matches.

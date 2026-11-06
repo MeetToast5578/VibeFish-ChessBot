@@ -2,6 +2,7 @@
 
   python evaluate.py --model models/vibefish_v2.pt --puzzles --heldout --match 1320,1600 --games 40
   python evaluate.py --v1 /path/to/v1/checkout ...      # VibeFish v1 (policy only), for comparison
+  python evaluate.py --model models/vibefish_v3.pt --vs models/vibefish_v2.pt --games 100   # head-to-head
 
 puzzles  bench/puzzles.csv: 1,050 Lichess puzzles (7 rating bands). Solved = every move matched
          (any checkmating move also counts).
@@ -9,6 +10,7 @@ heldout  bench/heldout.pkl: 1,000 Lichess positions, every legal move graded by 
          wp_lost = win prob given up vs the best move, top1 = picked a best move.
 match    vs Stockfish with UCI_LimitStrength at the given UCI_Elo levels (0.1 s/move), colours
          alternate on the same random opening. "random" plays a random mover.
+vs       head-to-head against another model (--vs path, or v1:<checkout> for VibeFish v1).
 """
 import argparse
 import csv
@@ -30,6 +32,7 @@ import torch
 from teacher import STOCKFISH, to_grade
 
 _pick = None
+_opp = None
 
 
 def make_pick(spec):
@@ -49,9 +52,15 @@ def make_pick(spec):
     return lambda b: net.pick(without_history(b) if strip else b, mix=mix)
 
 
-def _init(spec):
-    global _pick
+def spec_of(arg):
+    """'v1:<checkout>' -> v1 spec, anything else -> a model path (policy only)."""
+    return ("v1", arg[3:], None, False) if arg.startswith("v1:") else ("v2", arg, 0.0, False)
+
+
+def _init(spec, opp=None):
+    global _pick, _opp
     _pick = make_pick(spec)
+    _opp = make_pick(opp) if opp else None
 
 
 def _puzzle(row):
@@ -103,7 +112,7 @@ def _game(args):
         board.push(rng.choice(list(board.legal_moves)))
     bot_white = g % 2 == 0
     engine = None
-    if elo != "random":
+    if elo not in ("random", "vs"):
         engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH)
         engine.configure({"Threads": 1, "UCI_LimitStrength": True, "UCI_Elo": int(elo)})
     try:
@@ -112,6 +121,8 @@ def _game(args):
                 move = _pick(board)
             elif engine:
                 move = engine.play(board, chess.engine.Limit(time=0.1)).move
+            elif elo == "vs":
+                move = _opp(board)
             else:
                 move = random.choice(list(board.legal_moves))
             board.push(move)
@@ -123,32 +134,35 @@ def _game(args):
     return (pts if bot_white else 1 - pts), board
 
 
-def match(pool, elo, games, pgn=None):
+def match(pool, elo, games, pgn=None, me="VibeFish", opp=None):
     res = pool.map(_game, [(elo, g) for g in range(games)], chunksize=1)
     pts = [r[0] for r in res]
     s = float(np.mean(pts))
-    out = {"opp": elo, "W": pts.count(1.0), "D": pts.count(0.5), "L": pts.count(0.0), "score": round(s, 3)}
-    if elo != "random":
+    opp = opp or f"opp {elo}"
+    out = {"opp": opp if elo == "vs" else elo, "W": pts.count(1.0), "D": pts.count(0.5), "L": pts.count(0.0), "score": round(s, 3)}
+    if elo not in ("random", "vs"):
         sc = min(max(s, 0.5 / games), 1 - 0.5 / games)   # avoid infinities on 0% / 100%
         out["perf_elo"] = round(int(elo) + 400 * math.log10(sc / (1 - sc)))
     if pgn:
         with open(pgn, "a") as f:
             for i, (_, b) in enumerate(res):
                 game = chess.pgn.Game.from_board(b)
-                game.headers["White"], game.headers["Black"] = ("VibeFish", f"opp {elo}") if i % 2 == 0 else (f"opp {elo}", "VibeFish")
+                game.headers["Result"] = b.result(claim_draw=True)   # from_board leaves claimable draws as "*"
+                game.headers["White"], game.headers["Black"] = (me, opp) if i % 2 == 0 else (opp, me)
                 print(game, file=f, end="\n\n")
     return out
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="models/vibefish_v2.pt")
+    p.add_argument("--model", default="models/vibefish_v3.pt")
     p.add_argument("--v1", help="path to a VibeFish v1 checkout (evaluates v1 instead)")
     p.add_argument("--mix", type=float, default=0.0, help="weight of the action-value head in the move choice")
     p.add_argument("--strip-history", action="store_true", help="hide move history from the model")
     p.add_argument("--puzzles", action="store_true")
     p.add_argument("--heldout", action="store_true")
     p.add_argument("--match", default="", help="comma list of UCI_Elo levels and/or 'random'")
+    p.add_argument("--vs", help="also play a head-to-head match vs this model (path, or v1:<checkout>)")
     p.add_argument("--games", type=int, default=40)
     p.add_argument("--pgn")
     p.add_argument("--workers", type=int, default=os.cpu_count())
@@ -156,12 +170,13 @@ if __name__ == "__main__":
     a = p.parse_args()
     spec = ("v1", a.v1, None, False) if a.v1 else ("v2", a.model, a.mix, a.strip_history)
     out = {"model": a.v1 or a.model, "mix": a.mix, "strip_history": a.strip_history}
-    with mp.Pool(a.workers, _init, (spec,)) as pool:
+    opps = [e for e in a.match.split(",") if e] + (["vs"] if a.vs else [])
+    with mp.Pool(a.workers, _init, (spec, a.vs and spec_of(a.vs))) as pool:
         if a.heldout:
             out.update(heldout(pool)); print(out, flush=True)
         if a.puzzles:
             out.update(puzzles(pool)); print(out, flush=True)
-        out["matches"] = [match(pool, e, a.games, a.pgn) for e in a.match.split(",") if e]
+        out["matches"] = [match(pool, e, a.games, a.pgn, a.v1 or a.model, a.vs if e == "vs" else None) for e in opps]
     print(json.dumps(out))
     if a.log:
         with open(a.log, "a") as f:

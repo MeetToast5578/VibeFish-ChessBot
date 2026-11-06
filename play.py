@@ -56,10 +56,10 @@ def uci(model, name):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="models/vibefish_v2.pt")
+    p.add_argument("--model", default="models/vibefish_v3.pt")
     p.add_argument("--uci", action="store_true")
     p.add_argument("--black", action="store_true", help="play black against the bot")
     a = p.parse_args()
     torch.set_num_threads(1)
     net = load(a.model)
-    uci(net, "VibeFish v2") if a.uci else human(net, not a.black)
+    uci(net, "VibeFish v3") if a.uci else human(net, not a.black)

@@ -68,3 +68,18 @@ def test_model_picks_legal_moves():
             assert net.pick(b, mix=1.0) in b.legal_moves
     p, a, v = net(torch.from_numpy(encode(chess.Board()))[None])
     assert p.shape == a.shape == (1, 4096) and v.shape == (1,)
+
+
+def test_head_to_head_game_uses_both_players():
+    import evaluate
+    seen = {"me": 0, "opp": 0}
+    def player(who):
+        def pick(b):
+            seen[who] += 1
+            return random.choice(list(b.legal_moves))
+        return pick
+    evaluate._pick, evaluate._opp = player("me"), player("opp")
+    pts, board = evaluate._game(("vs", 1))
+    assert pts in (0.0, 0.5, 1.0)
+    assert board.is_game_over(claim_draw=True) or board.ply() >= 400
+    assert seen["me"] > 0 and seen["opp"] > 0
