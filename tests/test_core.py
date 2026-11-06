@@ -70,6 +70,23 @@ def test_model_picks_legal_moves():
     assert p.shape == a.shape == (1, 4096) and v.shape == (1,)
 
 
+def test_block_matches_torch_layer_and_grow_is_identity():
+    import model
+    torch.manual_seed(0)
+    net = ChessGPT(d=32, layers=2, heads=4).eval()
+    h = torch.randn(3, model.SEQ, 32)
+    assert torch.allclose(net.body(h), model.block(net.body.layers[1], model.block(net.body.layers[0], h)), atol=1e-5)
+    x = torch.from_numpy(np.stack([encode(b) for b in random_boards(4)]))
+    big = model.grow(net, 3, bias=True).eval()
+    assert big.cfg["layers"] == 3 and big.attn_bias.shape == (3, 4, model.SEQ, model.SEQ)
+    for a, b in zip(net(x), big(x)):
+        assert torch.allclose(a, b, atol=1e-5)
+    looped = model.grow(net, 3, loops=2, bias=True)
+    looped.train()
+    sum(t.sum() for t in looped(x)).backward()   # bias and loop offsets get gradients
+    assert looped.attn_bias.grad.abs().sum() > 0 and looped.loop_emb.grad.abs().sum() > 0
+
+
 def test_head_to_head_game_uses_both_players():
     import evaluate
     seen = {"me": 0, "opp": 0}

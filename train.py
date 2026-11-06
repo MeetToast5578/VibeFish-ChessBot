@@ -14,7 +14,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from model import ChessGPT, save, load
+from model import ChessGPT, save, load, grow
 from data import load_shard
 from teacher import to_grade
 
@@ -31,7 +31,10 @@ p.add_argument("--w-value", type=float, default=1.0)
 p.add_argument("--d", type=int, default=128)
 p.add_argument("--layers", type=int, default=4)
 p.add_argument("--heads", type=int, default=4)
+p.add_argument("--loops", type=int, default=1, help="passes through the layer stack (shared weights)")
+p.add_argument("--attn-bias", action="store_true", help="learned square-pair attention bias per layer and head")
 p.add_argument("--init", help="start from this model file")
+p.add_argument("--grow", action="store_true", help="with --init: copy it into a model with --layers/--loops/--attn-bias (d, heads from --init)")
 p.add_argument("--eval-every", type=int, default=500)
 p.add_argument("--threads", type=int, default=4)
 p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -140,7 +143,11 @@ def main():
     scaler = torch.amp.GradScaler("cuda", enabled=dev.type == "cuda" and amp == torch.float16)
     held = [t.to(dev) for t in to_batch([(hx, hi, hs)])]
 
-    model = (load(args.init).train() if args.init else ChessGPT(args.d, args.layers, args.heads)).to(dev)
+    if args.init:
+        model = grow(load(args.init), args.layers, args.loops, args.attn_bias) if args.grow else load(args.init)
+    else:
+        model = ChessGPT(args.d, args.layers, args.heads, args.loops, args.attn_bias)
+    model = model.train().to(dev)
     print(f"params: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M  cfg {model.cfg}", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95))
     log = open(f"{args.out}/log.jsonl", "a")
