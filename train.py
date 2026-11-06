@@ -36,6 +36,8 @@ p.add_argument("--loops", type=int, default=1, help="passes through the layer st
 p.add_argument("--attn-bias", action="store_true", help="learned square-pair attention bias per layer and head")
 p.add_argument("--init", help="start from this model file")
 p.add_argument("--grow", action="store_true", help="with --init: copy it into a model with --layers/--loops/--attn-bias (d, heads from --init)")
+p.add_argument("--boost-from", type=int, help="layers from this index on (and the attention bias) train at --boost x lr")
+p.add_argument("--boost", type=float, default=1.0, help="lr multiplier for --boost-from, e.g. for layers added by --grow")
 p.add_argument("--ema", type=float, default=0.999, help="decay of the weight average saved as ema.pt (0 = off)")
 p.add_argument("--opt-state", help="with --init: continue this saved optimizer state (opt.pt of the same model)")
 p.add_argument("--eval-every", type=int, default=500)
@@ -166,7 +168,14 @@ def main():
         model = ChessGPT(args.d, args.layers, args.heads, args.loops, args.attn_bias)
     model = model.train().to(dev)
     print(f"params: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M  cfg {model.cfg}", flush=True)
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95))
+    fast_ids = set()
+    if args.boost_from is not None:
+        fast_ids = {id(t) for layer in model.body.layers[args.boost_from:] for t in layer.parameters()}
+        if model.attn_bias is not None:
+            fast_ids.add(id(model.attn_bias))
+    groups = [{"params": [t for t in model.parameters() if id(t) not in fast_ids], "mult": 1.0},
+              {"params": [t for t in model.parameters() if id(t) in fast_ids], "mult": args.boost}]
+    opt = torch.optim.AdamW([g for g in groups if g["params"]], lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95))
     if args.opt_state:
         opt.load_state_dict(torch.load(args.opt_state, map_location=dev))
     ema = copy.deepcopy(model).requires_grad_(False) if args.ema else None
@@ -184,7 +193,7 @@ def main():
     while (frac := (time.time() - t0) / budget) < 1:
         lr = args.lr * min(1, (step + 1) / args.warmup) * (0.05 + 0.95 * 0.5 * (1 + math.cos(math.pi * frac)))
         for gr in opt.param_groups:
-            gr["lr"] = lr
+            gr["lr"] = lr * gr["mult"]
         batch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(sources, counts) if n for p in s.take(n)])]
         with torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda"):   # mixed precision on GPUs only (slower on this CPU)
             pol, act, val, _ = losses(fast, batch)
