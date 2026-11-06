@@ -130,11 +130,12 @@ without AMX) and ~34 positions/s/core for Stockfish grading every move at depth 
 | `teacher.py` | Stockfish grading of every legal move (lean UCI pipe), score → grade conversion, self-play worker |
 | `data.py` | Lichess eval DB / puzzle positions / DAgger games → encoded `.npz` shards; builds the puzzle benchmark |
 | `train.py` | trainer with a wall-clock budget, mixes several data sources |
-| `evaluate.py` | puzzles, held-out positions, matches vs Stockfish `UCI_Elo`, head-to-head vs another model (`--vs`; VibeFish v1 via `--v1` / `--vs v1:<checkout>`) |
+| `evaluate.py` | puzzles, held-out positions, matches vs Stockfish `UCI_Elo`, head-to-head vs another model (`--vs`; VibeFish v1 via `--v1 models/v1` / `--vs v1:models/v1`) |
 | `kaggle_run.py` | runs commands on a Kaggle GPU notebook with datasets attached, downloads the outputs |
 | `play.py` | terminal play and UCI mode |
 | `models/vibefish_v3.pt` | the v3 weights (fp16, 13.4 MB) |
 | `models/vibefish_v2.pt` | the v2 weights (fp16, ~6 MB) |
+| `models/v1/` | VibeFish v1: its own `model.py` (different architecture) and weights (3.5 MB) |
 | `bench/` | benchmark sets, `results.jsonl` with every evaluation run, training logs |
 | `games/` | match games vs Stockfish and the v1 / v2 / v3 round-robin |
 | `PLAN.md`, `CLAUDE.md` | roadmap / measurements, and notes for agents working on the repo |
