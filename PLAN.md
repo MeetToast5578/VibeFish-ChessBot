@@ -257,12 +257,12 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
    and value heads; ChessBench only trains the policy.
 
 **C. Training recipe**
-7. **DDP instead of `nn.DataParallel`** for 2×T4: DataParallel copies weights every step and
-   usually leaves 20–40% speed on the table. More positions per GPU hour is free strength. [code]
-8. **EMA of weights** (item 9), shipped instead of the raw weights. Cheap, usually a small,
-   reliable gain for long runs. [code]
-9. **Save optimizer state with checkpoints** so a run can continue across 12 h sessions without
-   restarting Adam (currently only weights are saved). [code]
+7. ~~DDP instead of `nn.DataParallel`~~ dropped: v3 measured 1,900 pos/s on one T4 and 3,580 on
+   two, so DataParallel already scales 1.88×; DDP could add ≤ 6%.
+8. [x] **EMA of weights** (item 9): `train.py --ema 0.999` (default) saves `ema.pt` next to
+   `model.pt` and logs `ema_policy_lost` / `ema_policy_top1`. Ship whichever wins.
+9. [x] **Optimizer state saved** (`opt.pt`) with every checkpoint; continue a run across
+   sessions with `--init model.pt --opt-state opt.pt`.
 10. **Learning rate for grown layers:** check in the pilots' logs that the new layers move; if
     not, give them a higher lr (separate param group) for the first hour. [code]
 11. **Main run 10–11 h** from the pilot winner, with the cosine schedule over the full run and
@@ -284,7 +284,7 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
 17. **DeepMind's 10k test puzzles** for a direct comparison with their 9M / 270M models. [CPU]
 18. **Lichess bot account** (owner creates it) for a human-comparable rating (item 19).
 
-**Suggested order:** pilots → (B1, B3 on CPU in parallel, C7–C9 code) → main run with D4 + CB3 in
+**Suggested order:** pilots → (B1, B3 on CPU in parallel; `vibefish-cb-3` / `-4` = positions 40–80M started) → main run with D4 + CB3 in
 the mix → evaluate (E15–E17) → tune `--mix` and mirror averaging → ship if it beats v3 →
 second-round fine-tune with deeper labels and tablebases if GPU hours remain.
 
