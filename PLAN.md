@@ -228,7 +228,67 @@ Original plan:
 14. **Horizontal-flip augmentation** for positions without castling rights.
 15. **Analyse the draws against the random mover** (stalemate? repetition? 50-move rule?).
 
-### v4: distillation and compactness
+### v4: bigger and deeper (in progress)
+
+v3 grown to **16 layers, d=256, 13.6M params** (owner raised the cap to 14M), initialised from
+v3.1-cb with the new layers as identity. **Free Kaggle tier only** (owner, 2026-11-06): ~18 GPU h
+left this week, 30 h/week after; CPU notebooks are free. No search, one forward pass.
+
+Everything that can make v4 as strong as possible, roughly by expected gain per cost.
+[GPU] = uses GPU quota, [CPU] = free Kaggle CPU notebook or this machine, [code] = change needed.
+
+**A. Already running**
+- [ ] Pilots, ~2 h each, from v3.1-cb on unseen ChessBench (CB2): `vibefish-v4-pilot-a` (16 layers
+      + square-pair attention bias) vs `-b` (16 layers, no bias). Gives the bias verdict and the
+      real 16-layer training speed. [GPU 4 h]
+
+**B. Data and labels (biggest proven lever: "labels are everything")**
+1. **Self-play round D4 from the pilot winner** (DAgger, every move graded at depth 8, varied
+   starts with `--start-puzzles`). v2 and v3 got their biggest jumps from this. Run on CPU
+   notebooks while the main run trains. [CPU]
+2. **Deeper labels where it matters:** regrade at depth 12–16 the positions where the model's
+   move loses > 0.05 win prob (from D4 and held-out-style samples). Depth 8 is our ceiling now. [CPU]
+3. **More fresh ChessBench:** convert positions 40–80M (`cb-3`, `cb-4`) so the main run never
+   repeats data; the v3.1 lesson is that repeats don't help. Best-move-only, so keep it ≤ 35% of the mix. [CPU]
+4. **Endgame tablebases (Syzygy ≤ 5 pieces, ~1 GB):** exact labels for endgame positions from
+   self-play, so won endgames get converted (item 12). [CPU, code]
+5. **Hard-example mining:** oversample positions where the model's move loses the most (item 13). [code]
+6. **Keep ≥ 50% every-move-graded data** (L, L2, S2, D) in the mix: those train the action-value
+   and value heads; ChessBench only trains the policy.
+
+**C. Training recipe**
+7. **DDP instead of `nn.DataParallel`** for 2×T4: DataParallel copies weights every step and
+   usually leaves 20–40% speed on the table. More positions per GPU hour is free strength. [code]
+8. **EMA of weights** (item 9), shipped instead of the raw weights. Cheap, usually a small,
+   reliable gain for long runs. [code]
+9. **Save optimizer state with checkpoints** so a run can continue across 12 h sessions without
+   restarting Adam (currently only weights are saved). [code]
+10. **Learning rate for grown layers:** check in the pilots' logs that the new layers move; if
+    not, give them a higher lr (separate param group) for the first hour. [code]
+11. **Main run 10–11 h** from the pilot winner, with the cosine schedule over the full run and
+    a lower final lr. Expect ~60M positions; memmap shards are only needed past ~50M in RAM. [GPU 10 h]
+12. **Binned value / action-value heads (HL-Gauss, item 7):** DeepMind's best loss. Try in a
+    second pilot only after the main run, one change at a time. [code, GPU]
+
+**D. Play-time, still no search**
+13. **Tune `--mix`** (policy + action-value blend) on held-out and a 100-game match; v4's
+    action-value head is trained on far more every-move data than v2's was. [CPU]
+14. **Mirror averaging** for positions without castling rights (left-right flip, average the
+    two policies): two passes of the same network on the same position, allowed by the rules (item 18). [code]
+
+**E. Measuring properly**
+15. **200-game matches** for v4 vs v3 (100 games has ±5% noise, too much for small gains), plus
+    the usual 120-game SF 1320/1600/2000 matches. Ship only if it clearly beats v3. [CPU]
+16. **Blunder report by game phase** (opening / middlegame / endgame, lost win prob per move from
+    the match PGNs) to aim the next data at the weakest phase. [code, CPU]
+17. **DeepMind's 10k test puzzles** for a direct comparison with their 9M / 270M models. [CPU]
+18. **Lichess bot account** (owner creates it) for a human-comparable rating (item 19).
+
+**Suggested order:** pilots → (B1, B3 on CPU in parallel, C7–C9 code) → main run with D4 + CB3 in
+the mix → evaluate (E15–E17) → tune `--mix` and mirror averaging → ship if it beats v3 →
+second-round fine-tune with deeper labels and tablebases if GPU hours remain.
+
+### Later: distillation and compactness
 
 16. **Teacher → student (our own teacher only):** train a bigger VibeFish teacher (e.g. 50–100M)
     on Stockfish labels, have it label positions the small model reaches, and train the small
