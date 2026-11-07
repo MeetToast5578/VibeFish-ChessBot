@@ -286,6 +286,8 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
     EMA 0.0209. The new layers' weight norms grew from ~3 to 16–37, bias |b| 0.011 → 0.18.
     200 games vs v3: model **53.7%** (+73 =69 −58), EMA **55.2%** (+74 =73 −53). Puzzles 59.4% /
     59.1%, evaluate.py held-out 0.0233 / 0.0232 (v3 59.3%, 0.028).
+    SF 2000, 120 games (EMA): **47.9%** (+42 =31 −47, perf 1986), even with v3's 48.7%. The head-to-head
+    gain doesn't show against Stockfish yet, so the gate isn't met.
     **Unexplained slowdown:** ~2,330 pos/s until step 60,000 (minute 440), then only 1,738 steps
     in the last 193 min, with no error in the log. So the lr tail below 5e-5 never ran.
     The fine-tune logs every 2,000 steps to find where it starts.

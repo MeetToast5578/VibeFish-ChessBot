@@ -55,8 +55,8 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 - **Fine-tune running:** `vibefish-v4-ft`, 3 h, from the main run's `ema.pt` + `opt.pt`, lr 1e-4,
   with CB4 30%, D4 15% and L2_10–19 (unused so far) in the mix. Benchmark its `model.pt` and `ema.pt`
   with 200 games vs v3 and vs `models/vibefish_v4_main_ema.pt`.
-- **SF 2000 match** (120 games) for the main-run EMA: run locally into `bench/results.jsonl`
-  (v3: 48.7%). v4 ships if it beats v3 head-to-head and against Stockfish.
+- **SF 2000 match** (120 games) for the main-run EMA: **47.9%** (v3: 48.7%), so not shipped yet.
+  v4 ships if it beats v3 head-to-head and against Stockfish. Rerun the SF match on the fine-tune.
 
 ## v4 plan (agreed in chat)
 
