@@ -279,8 +279,16 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
 10. [x] **Learning rate for grown layers:** the pilots' new layers did not move enough (A above).
     `train.py --boost-from 8 --boost 5` trains layers 8–15 and the attention bias at 5× lr
     (1e-3 at lr 2e-4, v3's from-scratch lr). Used for the main run.
-11. **Main run 10–11 h** from the pilot winner, with the cosine schedule over the full run and
+11. [x] **Main run 10–11 h** from the pilot winner, with the cosine schedule over the full run and
     a lower final lr. Expect ~60M positions; memmap shards are only needed past ~50M in RAM. [GPU 10 h]
+    *Done* (`vibefish-v4-main`, `models/vibefish_v4_main.pt` + `_ema.pt`): from pilot A, boost 5
+    on layers 8–15, CB3 35% of the mix, 63.2M positions. Held-out (train.py) 0.0222 → 0.0211,
+    EMA 0.0209. The new layers' weight norms grew from ~3 to 16–37, bias |b| 0.011 → 0.18.
+    200 games vs v3: model **53.7%** (+73 =69 −58), EMA **55.2%** (+74 =73 −53). Puzzles 59.4% /
+    59.1%, evaluate.py held-out 0.0233 / 0.0232 (v3 59.3%, 0.028).
+    **Unexplained slowdown:** ~2,330 pos/s until step 60,000 (minute 440), then only 1,738 steps
+    in the last 193 min, with no error in the log. So the lr tail below 5e-5 never ran.
+    The fine-tune logs every 2,000 steps to find where it starts.
 12. **Binned value / action-value heads (HL-Gauss, item 7):** DeepMind's best loss. Try in a
     second pilot only after the main run, one change at a time. [code, GPU]
 

@@ -42,17 +42,21 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 2. ~~Time-control check~~ done: v3 vs SF 2000 at 1 s/move, two 60-game runs: 52.5% and 50.0% (48.7% at 0.1 s). Elo figures stand.
 3. **v4** (owner's direction: bigger and deeper, ≤ 14M; v3 isn't strong enough).
 
-## v4 status (2026-11-06, ~22:50 UTC)
+## v4 status (2026-11-07, ~10:30 UTC)
 
 - **Pilots done** (PLAN.md v4 section A has the table). A (16 layers + bias) scored 53% vs v3 and
   B 48.5%, both within noise. The 8 added layers barely trained (weight norm ~3 vs ~70), so
   `train.py --boost-from 8 --boost 5` now gives them 5× lr. Both models are in `models/`.
-- **Main run:** continues pilot A for ~10.5 h with the boost, CB3 (fresh ChessBench, positions
-  40–60M) instead of CB2. Kernel `vibefish-v4-main`. It saves `model.pt`, `ema.pt` and `opt.pt`
-  every 4,000 steps. When it finishes, benchmark both `model.pt` and `ema.pt`.
-- **Self-play D4** (CPU, free): `vibefish-d4-1` / `-2`, 2,000 games each from pilot A. Outputs are
-  `D4_*.npz`, for a 2–3 h fine-tune after the main run.
-- `vibefish-cb-4` (positions 60–80M) is for that fine-tune too.
+- **Main run done** (2026-11-07 09:50 UTC; PLAN item C11 has the details). 200 games vs v3:
+  the EMA scored **55.2%** and the plain weights 53.7%. Both models are in `models/`
+  (`vibefish_v4_main.pt`, `vibefish_v4_main_ema.pt`). Its last ~3 h ran ~15× slower for no visible reason.
+- **Self-play D4 done:** 4,000 games from pilot A, 311k positions (`D4_10`–`D4_23` in the
+  `vibefish-d4-1` / `-2` outputs). Its own moves lose 0.0247 wp on average (D3: 0.027).
+- **Fine-tune running:** `vibefish-v4-ft`, 3 h, from the main run's `ema.pt` + `opt.pt`, lr 1e-4,
+  with CB4 30%, D4 15% and L2_10–19 (unused so far) in the mix. Benchmark its `model.pt` and `ema.pt`
+  with 200 games vs v3 and vs `models/vibefish_v4_main_ema.pt`.
+- **SF 2000 match** (120 games) for the main-run EMA: run locally into `bench/results.jsonl`
+  (v3: 48.7%). v4 ships if it beats v3 head-to-head and against Stockfish.
 
 ## v4 plan (agreed in chat)
 
