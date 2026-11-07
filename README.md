@@ -1,6 +1,6 @@
-# VibeFish v3
+# VibeFish v4
 
-A small chess bot with **no search**. A 6.7M-parameter transformer looks at the board once and
+A small chess bot with **no search**. A 13.6M-parameter transformer looks at the board once and
 picks a move. No alpha-beta, no MCTS, no lookahead. Every bit of strength is in the network.
 
 ```bash
@@ -10,24 +10,28 @@ python play.py --uci        # UCI engine for chess GUIs / lichess-bot
 
 ## Results
 
-All numbers are **policy only**: one forward pass per move. Benchmarks live in `bench/` and are
-never trained on.
+Every number is **one forward pass per move**. v1–v3 use the policy head only. v4 adds the
+action-value head's win-probability estimate for each move to the policy (`--mix 2`, the default).
+Both heads come out of the same pass. Benchmarks live in `bench/` and are never trained on.
 
-| | VibeFish v1 | VibeFish v2 | **VibeFish v3** |
-|---|---|---|---|
-| parameters | 0.88M | 2.88M (5.8 MB file) | 6.69M (13.4 MB file) |
-| puzzles solved (1,050) | 10.5% | 39.1% | **59.3%** |
-| ↳ by rating 400 / 800 / 1200 / 1600 / 2000 / 2400 / 2800+ | 25 / 17 / 17 / 8 / 4 / 2 / 1 % | 95 / 77 / 58 / 28 / 9 / 5 / 3 % | **100 / 96 / 88 / 67 / 41 / 21 / 2 %** |
-| held-out: win prob lost per move | 0.086 | 0.054 | **0.028** |
-| held-out: picks Stockfish's best move | 33% | 42% | **52%** |
-| vs random mover (120 games) | +19 =99 −2 | +106 =14 −0 | **+118 =2 −0** |
-| vs Stockfish `UCI_Elo` 1320 (120 games) | +3 =23 −94 (12%) | +48 =29 −43 (52%) | **+105 =10 −5 (92%)** |
-| vs Stockfish `UCI_Elo` 1600 (120 games) | – | +18 =26 −76 (26%) | **+79 =18 −23 (73%)** |
-| vs Stockfish `UCI_Elo` 2000 (120 games) | – | +3 =22 −95 (12%) | **+45 =27 −48 (49%)** |
+| | VibeFish v1 | VibeFish v2 | VibeFish v3 | **VibeFish v4** |
+|---|---|---|---|---|
+| parameters | 0.88M | 2.88M (5.8 MB file) | 6.69M (13.4 MB file) | **13.6M (27 MB file)** |
+| puzzles solved (1,050) | 10.5% | 39.1% | 59.3% | **63.5%** |
+| ↳ by rating 400 / 800 / 1200 / 1600 / 2000 / 2400 / 2800+ | 25 / 17 / 17 / 8 / 4 / 2 / 1 % | 95 / 77 / 58 / 28 / 9 / 5 / 3 % | 100 / 96 / 88 / 67 / 41 / 21 / 2 % | **99 / 98 / 93 / 79 / 45 / 27 / 4 %** |
+| held-out: win prob lost per move | 0.086 | 0.054 | 0.028 | **0.023** |
+| held-out: picks Stockfish's best move | 33% | 42% | 52% | **55%** |
+| vs random mover (120 games) | +19 =99 −2 | +106 =14 −0 | +118 =2 −0 | **+117 =3 −0** |
+| vs Stockfish `UCI_Elo` 1320 (120 games) | +3 =23 −94 (12%) | +48 =29 −43 (52%) | +105 =10 −5 (92%) | **+113 =6 −1 (97%)** |
+| vs Stockfish `UCI_Elo` 1600 (120 games) | – | +18 =26 −76 (26%) | +79 =18 −23 (73%) | **+86 =19 −15 (80%)** |
+| vs Stockfish `UCI_Elo` 2000 (200 games) | – | +3 =22 −95 (12%, 120 games) | +72 =45 −83 (47%) | **+86 =53 −61 (56%)** |
+| vs Stockfish `UCI_Elo` 2400 (200 games) | – | – | – | **+38 =56 −106 (33%)** |
+| head-to-head vs v3 (200 games) | | | – | **+106 =54 −40 (66.5%)** |
 
-On Stockfish's limited-strength scale (at 0.1 s per move) v3 performs at **~1,740–1,990**
-(1737 / 1776 / 1991 against SF 1320 / 1600 / 2000), v2 at ~1,350–1,650 and v1 at ~975. v3 scores
-49% against SF 2000, where v2 scored 12%, with zero search.
+On Stockfish's limited-strength scale (at 0.1 s per move) v4 performs at **~2,040** against
+SF 2000 and 2,277 against SF 2400. v3 performs at 1,981 against SF 2000, v2 at ~1,350–1,650 and
+v1 at ~975. Against weak opponents the perf numbers say little (v4 has 1 loss in 120 games
+against SF 1320). Head to head, v4 beats v3 66.5%, about +120 Elo.
 
 **Round-robin** (100 games per pair, 50 random 4-ply openings played with both colours,
 `games/roundrobin_v1_v2_v3.pgn`):
@@ -49,7 +53,34 @@ Sample games: `games/v3s2_matches.pgn` (v3 vs Stockfish), `games/v2_vs_sf1600.pg
 * **Matches**: against Stockfish 17.1 with `UCI_LimitStrength` (0.1 s per move, so it plays below
   its nominal rating), colours alternating on the same random 4-ply openings.
 
-## What's new in v3
+## What's new in v4
+
+1. **Twice as deep:** 16 layers instead of 8 (width 256, 13.6M parameters; the owner raised the
+   cap to 14M). It grew out of v3: the 8 new layers start as identity, so training begins from
+   v3's play. A learned **square-pair attention bias** per layer and head is added.
+2. **The new layers need a higher learning rate.** In a 2 h pilot they barely moved (weight norm
+   ~3 vs ~70 for v3's layers). Training them at 5× lr (`train.py --boost-from 8 --boost 5`) fixed it.
+3. **More and fresher data:** ~100M positions seen over the pilot, main run and fine-tune,
+   with a third of each batch drawn from 60M fresh ChessBench positions (DeepMind, best move only),
+   our own every-move-graded data, and a new self-play round (D4, 4,000 games, 311k positions).
+4. **Weight averaging (EMA)** and saved optimizer state in `train.py`. The shipped weights are the EMA.
+5. **Action-value blend at play time (`--mix 2`):** still one pass, but the move choice also uses
+   the action-value head. +4–8% against Stockfish over policy only.
+
+Where it still loses: in the middlegame. `bench/blunders.py` graded v4's moves against SF 2000.
+The middlegame holds 70% of the lost win probability and 42 of its 50 moves that lose more
+than 0.3; the endgame holds 18%. Details and every step: `PLAN.md` (v4 section).
+
+## How v4 was trained (Kaggle, 2×T4)
+
+| stage | data | time |
+|---|---|---|
+| pilot A | grown from v3.1-cb to 16 layers + attention bias; ChessBench CB2 (35%), Lichess L / L2, puzzle positions S2, self-play D1–D3 | 110 min, 14M positions |
+| main | from pilot A, layers 8–15 at 5× lr; ChessBench CB3 (35%) + the same every-move-graded mix; lr 2e-4, cosine | 10.5 h, 63M positions |
+| self-play D4 | pilot A plays 4,000 games (half from puzzle positions); SF 17.1 grades every move at depth 8 | 311k positions, Kaggle CPU |
+| fine-tune | from the main run's EMA and optimizer state: ChessBench CB4 (30%), D4 (15%), unused Lichess L2_10–19, S2, D3; lr 1e-4 | 3 h, 23M positions |
+
+## What was new in v3
 
 Same encoding and network design as v2, scaled up and trained on free Kaggle GPUs (2×T4, fp16):
 
@@ -115,12 +146,12 @@ without AMX) and ~34 positions/s/core for Stockfish grading every move at depth 
 
 ## Weaknesses / next steps
 
-* Deep tactics are still weak: 41% of puzzles rated 2000, 21% at 2400, 2% at 2800+. v3 saw
-  ~67M positions; DeepMind's searchless 9M model saw ~41 billion. Training volume is the main
-  lever (`PLAN.md`, "Road to 3000"), starting with the ChessBench data in v3.1.
-* The stage-2 fine-tune traded a little accuracy on ordinary game positions for tactics. The next
-  fine-tune should keep more Lichess data in the mix and start from a lower learning rate.
-* 2 of 120 games against a random mover were still draws.
+* Middlegame tactics: 45% of puzzles rated 2000, 27% at 2400, 4% at 2800+, and 70% of the win
+  probability v4 gives away against SF 2000 is in the middlegame. Our every-move labels come from
+  Stockfish at depth 8. The next self-play round (D5) is graded at depth 12.
+* v4's line has seen ~220M positions in all (v3, the v3.1 fine-tune and v4). DeepMind's searchless 9M model saw ~41
+  billion. Training volume is still the main lever (`PLAN.md`).
+* 3 of 120 games against a random mover were still draws.
 
 ## Files
 
@@ -130,16 +161,25 @@ without AMX) and ~34 positions/s/core for Stockfish grading every move at depth 
 | `teacher.py` | Stockfish grading of every legal move (lean UCI pipe), score → grade conversion, self-play worker |
 | `data.py` | Lichess eval DB / puzzle positions / DAgger games → encoded `.npz` shards; builds the puzzle benchmark |
 | `train.py` | trainer with a wall-clock budget, mixes several data sources |
-| `evaluate.py` | puzzles, held-out positions, matches vs Stockfish `UCI_Elo`, head-to-head vs another model (`--vs`; VibeFish v1 via `--v1 models/v1` / `--vs v1:models/v1`) |
+| `evaluate.py` | puzzles, held-out positions, matches vs Stockfish `UCI_Elo`, head-to-head vs another model (`--vs path` or `path@mix`; VibeFish v1 via `--v1 models/v1` / `--vs v1:models/v1`). Its `--mix` defaults to 0; v4's numbers use `--mix 2` |
+| `bench/blunders.py` | win probability a model gave away in match games, by game phase |
 | `kaggle_run.py` | runs commands on a Kaggle GPU notebook with datasets attached, downloads the outputs |
 | `play.py` | terminal play and UCI mode |
+| `models/vibefish_v4.pt` | the v4 weights (fp16, 27 MB; the fine-tune's EMA) |
 | `models/vibefish_v3.pt` | the v3 weights (fp16, 13.4 MB) |
+| `models/vibefish_v4_pilot_{a,b}.pt`, `vibefish_v4_main.pt`, `vibefish_v4_main_ema.pt`, `vibefish_v4_ft.pt`, `vibefish_v4_ft_ema.pt` | v4's steps, kept for comparison (`vibefish_v4.pt` is a copy of `_ft_ema`) |
 | `models/vibefish_v2.pt` | the v2 weights (fp16, ~6 MB) |
 | `models/vibefish_v3_stage1.pt`, `vibefish_v3_1_control.pt`, `vibefish_v3_1_cb.pt` | not shipped, kept for comparison: v3 stage 1, and the v3.1 fine-tunes without / with ChessBench (both even with v3) |
 | `models/v1/` | VibeFish v1: its own `model.py` (different architecture) and weights (3.5 MB) |
 | `bench/` | benchmark sets, `results.jsonl` with every evaluation run, training logs |
 | `games/` | match games vs Stockfish and the v1 / v2 / v3 round-robin |
 | `PLAN.md`, `CLAUDE.md` | roadmap / measurements, and notes for agents working on the repo |
+
+## Credits
+
+Trained in part on **ChessBench** (DeepMind, CC-BY 4.0): best-move records from the
+`searchless_chess` dataset. DeepMind's models are not used, only their data.
+Every-move grades come from Stockfish 17.1. Positions come from the Lichess evaluation and puzzle databases.
 
 ## Reproduce
 

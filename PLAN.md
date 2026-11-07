@@ -228,7 +228,15 @@ Original plan:
 14. **Horizontal-flip augmentation** for positions without castling rights.
 15. **Analyse the draws against the random mover** (stalemate? repetition? 50-move rule?).
 
-### v4: bigger and deeper (in progress)
+### v4: bigger and deeper (shipped 2026-11-07)
+
+**Shipped:** `models/vibefish_v4.pt` = the fine-tune's EMA (`vibefish-v4-ft`: 3 h from the main
+run's EMA + `opt.pt`, lr 1e-4, CB4 30%, D4 15%, L2_10–19, S2, D3; 22.6M positions, no slowdown),
+played with `--mix 2`. All 200 games: **66.5% vs v3** (+106 =54 −40), **61.5% vs v4-main** at mix 2
+(+86 =74 −40), **SF 2000 56.2%** (+86 =53 −61, perf 2044; v4-main 56.0%), **SF 2400 33.0%**
+(+38 =56 −106, 2277; v4-main 29.0%, 2244). 120 games: SF 1600 79.6% (1836), SF 1320 96.7%, random
++117 =3 −0. Puzzles 63.5% (v4-main 60.2%), held-out 0.0231 / 54.7%. The D4 self-play data shows
+mostly in head-to-head and puzzles; against SF 2000 it is even with v4-main.
 
 v3 grown to **16 layers, d=256, 13.6M params** (owner raised the cap to 14M), initialised from
 v3.1-cb with the new layers as identity. **Free Kaggle tier only** (owner, 2026-11-06): ~18 GPU h
