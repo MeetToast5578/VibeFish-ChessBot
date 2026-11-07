@@ -29,7 +29,8 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 3. Then PLAN v4 items: mirror averaging (D14), HL-Gauss value heads (C12), tablebases only if
    endgames start to matter.
 
-GPU budget: the pilots, main run and fine-tune used ~17 GPU h of this week's 30.
+GPU budget: v4 used ~18 GPU h (pilots 4, main 11, fine-tune 3) and the v3.1 runs ~8 h. Check the
+remaining weekly quota on Kaggle before a long run; the reset day hasn't been confirmed.
 
 ## Gotchas
 
