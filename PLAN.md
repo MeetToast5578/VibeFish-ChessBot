@@ -238,14 +238,27 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
 [GPU] = uses GPU quota, [CPU] = free Kaggle CPU notebook or this machine, [code] = change needed.
 
 **A. Already running**
-- [ ] Pilots, ~2 h each, from v3.1-cb on unseen ChessBench (CB2): `vibefish-v4-pilot-a` (16 layers
-      + square-pair attention bias) vs `-b` (16 layers, no bias). Gives the bias verdict and the
-      real 16-layer training speed. [GPU 4 h]
+- [x] Pilots, 110 min each on 2×T4, grown from v3.1-cb, CB2 35% of the mix (`models/vibefish_v4_pilot_{a,b}.pt`,
+      logs in `bench/train_logs/`):
+
+      | | A: 16 layers + bias | B: 16 layers | v3.1-cb (start) | v3 |
+      |---|---|---|---|---|
+      | positions seen (speed) | 13.6M (2,050/s) | 14.9M (2,260/s) | | |
+      | held-out wp_lost / top1 | 0.0248 / 54.0% | 0.0239 / 54.5% | 0.0243 / 54.3% | 0.028 / 52.2% |
+      | puzzles | 60.0% | 59.8% | 59.1% | 59.3% |
+      | vs v3, 100 games | **53.0%** (+40 =26 −34) | 48.5% (+33 =31 −36) | 50% | |
+
+      Both within noise of their start. **Why:** the 8 added layers barely trained. Their
+      out_proj + linear2 weight norms reached ~3 (v3's layers: 66–86), and the bias reached a
+      mean |b| of 0.011. A goes on (bias costs 10% speed, scored best). Fix: item 10.
 
 **B. Data and labels (biggest proven lever: "labels are everything")**
 1. **Self-play round D4 from the pilot winner** (DAgger, every move graded at depth 8, varied
    starts with `--start-puzzles`). v2 and v3 got their biggest jumps from this. Run on CPU
-   notebooks while the main run trains. [CPU]
+   notebooks while the main run trains. [CPU] *Started:* `vibefish-d4-1` / `-2`, 2,000 games
+   each from pilot A, 500-game chunks `D4_10`–`D4_23`, start puzzles from row 4.1M on (dagger
+   used to take the first rows, where the puzzle benchmark comes from; `--start` now sets it).
+   Goes into a fine-tune after the main run.
 2. **Deeper labels where it matters:** regrade at depth 12–16 the positions where the model's
    move loses > 0.05 win prob (from D4 and held-out-style samples). Depth 8 is our ceiling now. [CPU]
 3. **More fresh ChessBench:** convert positions 40–80M (`cb-3`, `cb-4`) so the main run never
@@ -257,16 +270,27 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
    and value heads; ChessBench only trains the policy.
 
 **C. Training recipe**
-7. **DDP instead of `nn.DataParallel`** for 2×T4: DataParallel copies weights every step and
-   usually leaves 20–40% speed on the table. More positions per GPU hour is free strength. [code]
-8. **EMA of weights** (item 9), shipped instead of the raw weights. Cheap, usually a small,
-   reliable gain for long runs. [code]
-9. **Save optimizer state with checkpoints** so a run can continue across 12 h sessions without
-   restarting Adam (currently only weights are saved). [code]
-10. **Learning rate for grown layers:** check in the pilots' logs that the new layers move; if
-    not, give them a higher lr (separate param group) for the first hour. [code]
-11. **Main run 10–11 h** from the pilot winner, with the cosine schedule over the full run and
+7. ~~DDP instead of `nn.DataParallel`~~ dropped: v3 measured 1,900 pos/s on one T4 and 3,580 on
+   two, so DataParallel already scales 1.88×; DDP could add ≤ 6%.
+8. [x] **EMA of weights** (item 9): `train.py --ema 0.999` (default) saves `ema.pt` next to
+   `model.pt` and logs `ema_policy_lost` / `ema_policy_top1`. Ship whichever wins.
+9. [x] **Optimizer state saved** (`opt.pt`) with every checkpoint; continue a run across
+   sessions with `--init model.pt --opt-state opt.pt`.
+10. [x] **Learning rate for grown layers:** the pilots' new layers did not move enough (A above).
+    `train.py --boost-from 8 --boost 5` trains layers 8–15 and the attention bias at 5× lr
+    (1e-3 at lr 2e-4, v3's from-scratch lr). Used for the main run.
+11. [x] **Main run 10–11 h** from the pilot winner, with the cosine schedule over the full run and
     a lower final lr. Expect ~60M positions; memmap shards are only needed past ~50M in RAM. [GPU 10 h]
+    *Done* (`vibefish-v4-main`, `models/vibefish_v4_main.pt` + `_ema.pt`): from pilot A, boost 5
+    on layers 8–15, CB3 35% of the mix, 63.2M positions. Held-out (train.py) 0.0222 → 0.0211,
+    EMA 0.0209. The new layers' weight norms grew from ~3 to 16–37, bias |b| 0.011 → 0.18.
+    200 games vs v3: model **53.7%** (+73 =69 −58), EMA **55.2%** (+74 =73 −53). Puzzles 59.4% /
+    59.1%, evaluate.py held-out 0.0233 / 0.0232 (v3 59.3%, 0.028).
+    SF 2000, 120 games (EMA): **47.9%** (+42 =31 −47, perf 1986), even with v3's 48.7%. The head-to-head
+    gain doesn't show against Stockfish yet, so the gate isn't met.
+    **Unexplained slowdown:** ~2,330 pos/s until step 60,000 (minute 440), then only 1,738 steps
+    in the last 193 min, with no error in the log. So the lr tail below 5e-5 never ran.
+    The fine-tune logs every 2,000 steps to find where it starts.
 12. **Binned value / action-value heads (HL-Gauss, item 7):** DeepMind's best loss. Try in a
     second pilot only after the main run, one change at a time. [code, GPU]
 
@@ -284,7 +308,7 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
 17. **DeepMind's 10k test puzzles** for a direct comparison with their 9M / 270M models. [CPU]
 18. **Lichess bot account** (owner creates it) for a human-comparable rating (item 19).
 
-**Suggested order:** pilots → (B1, B3 on CPU in parallel, C7–C9 code) → main run with D4 + CB3 in
+**Suggested order:** pilots → (B1, B3 on CPU in parallel; `vibefish-cb-3` / `-4` = positions 40–80M started) → main run with D4 + CB3 in
 the mix → evaluate (E15–E17) → tune `--mix` and mirror averaging → ship if it beats v3 →
 second-round fine-tune with deeper labels and tablebases if GPU hours remain.
 
