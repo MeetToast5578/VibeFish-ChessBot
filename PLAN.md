@@ -259,6 +259,9 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
    each from pilot A, 500-game chunks `D4_10`–`D4_23`, start puzzles from row 4.1M on (dagger
    used to take the first rows, where the puzzle benchmark comes from; `--start` now sets it).
    Goes into a fine-tune after the main run.
+   *Done:* 4,000 games, 311k positions, own moves lose 0.0247 wp (D3: 0.027). **D5 started**
+   (`vibefish-d5-1` / `-2`): 4,000 games from the v4 main EMA, graded at **depth 12** (B2 for the
+   positions v4 actually reaches), outputs `D5_10`–`D5_23`.
 2. **Deeper labels where it matters:** regrade at depth 12–16 the positions where the model's
    move loses > 0.05 win prob (from D4 and held-out-style samples). Depth 8 is our ceiling now. [CPU]
 3. **More fresh ChessBench:** convert positions 40–80M (`cb-3`, `cb-4`) so the main run never
@@ -297,14 +300,21 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
 **D. Play-time, still no search**
 13. **Tune `--mix`** (policy + action-value blend) on held-out and a 100-game match; v4's
     action-value head is trained on far more every-move data than v2's was. [CPU]
+    *Held-out / puzzles, v4 main EMA:* mix 0: 0.0232 / 59.1%; 0.5: 0.0234 / 59.4%; 1: 0.0235 / 59.9%;
+    **2: 0.0229 / 60.2%**; 4: 0.0235 / 60.3%; 8: 0.0243 / 59.6%; 16: 0.0247 / 59.1%. The 200-game match of mix 2 vs mix 0 is below.
 14. **Mirror averaging** for positions without castling rights (left-right flip, average the
     two policies): two passes of the same network on the same position, allowed by the rules (item 18). [code]
 
 **E. Measuring properly**
 15. **200-game matches** for v4 vs v3 (100 games has ±5% noise, too much for small gains), plus
     the usual 120-game SF 1320/1600/2000 matches. Ship only if it clearly beats v3. [CPU]
-16. **Blunder report by game phase** (opening / middlegame / endgame, lost win prob per move from
+16. [x] **Blunder report by game phase** (opening / middlegame / endgame, lost win prob per move from
     the match PGNs) to aim the next data at the weakest phase. [code, CPU]
+    *Done:* `bench/blunders.py` (depth 12, skips the 4 random opening plies). v4 main EMA vs SF 2000,
+    120 games: opening 12% of the lost win prob (0.0175/move), **middlegame 70%** (0.0289/move,
+    258 moves losing > 0.1, 42 losing > 0.3), endgame 18% (0.0144). v3 vs SF 2000 at 1 s looks
+    the same (12% / 74% / 15%, middlegame 0.0271/move). So the weak spot is middlegame tactics.
+    Tablebases (B4) can wait; deeper labels on middlegame positions (B2, D5 at depth 12) come first.
 17. **DeepMind's 10k test puzzles** for a direct comparison with their 9M / 270M models. [CPU]
 18. **Lichess bot account** (owner creates it) for a human-comparable rating (item 19).
 
