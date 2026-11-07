@@ -112,3 +112,10 @@ def test_chessbench_bag_reader_and_best_move_records(tmp_path):
     assert got == [(f, [], {m: teacher.UNKNOWN}) for f, m in zip(fens, ["e7e5", "g1f3"])]
     assert [data.parse_bc(r)[0] for r in data.bag_records(str(path), 1, 1)] == fens[1:]
     assert np.isnan(teacher.to_grade(teacher.UNKNOWN)) and teacher.to_grade(0) == 0.5
+
+
+def test_opponent_spec_takes_a_mix():
+    import evaluate
+    assert evaluate.spec_of("models/a.pt@2") == ("v2", "models/a.pt", 2.0, False)
+    assert evaluate.spec_of("models/a.pt") == ("v2", "models/a.pt", 0.0, False)
+    assert evaluate.spec_of("v1:models/v1")[:2] == ("v1", "models/v1")

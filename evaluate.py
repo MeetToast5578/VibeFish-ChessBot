@@ -54,8 +54,11 @@ def make_pick(spec):
 
 
 def spec_of(arg):
-    """'v1:<dir>' (e.g. v1:models/v1) -> v1 spec, anything else -> a model path (policy only)."""
-    return ("v1", arg[3:], None, False) if arg.startswith("v1:") else ("v2", arg, 0.0, False)
+    """'v1:<dir>' (e.g. v1:models/v1) -> v1 spec, anything else -> a model path, optionally 'path@mix'."""
+    if arg.startswith("v1:"):
+        return ("v1", arg[3:], None, False)
+    path, _, mix = arg.partition("@")
+    return ("v2", path, float(mix or 0), False)
 
 
 def _init(spec, opp=None):
@@ -163,7 +166,7 @@ if __name__ == "__main__":
     p.add_argument("--puzzles", action="store_true")
     p.add_argument("--heldout", action="store_true")
     p.add_argument("--match", default="", help="comma list of UCI_Elo levels and/or 'random'")
-    p.add_argument("--vs", help="also play a head-to-head match vs this model (path, or v1:models/v1)")
+    p.add_argument("--vs", help="also play a head-to-head match vs this model (path or path@mix, or v1:models/v1)")
     p.add_argument("--games", type=int, default=40)
     p.add_argument("--movetime", type=float, default=0.1, help="Stockfish seconds per move")
     p.add_argument("--pgn")
