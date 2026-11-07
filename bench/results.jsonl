@@ -32,3 +32,7 @@
 {"model": "models/vibefish_v4_main_ema.pt", "mix": 0.0, "strip_history": false, "wp_lost": 0.0232, "top1": 0.544, "puzzles": 0.5905, "puz_400": 0.987, "puz_800": 0.933, "puz_1200": 0.88, "puz_1600": 0.66, "puz_2000": 0.393, "puz_2400": 0.253, "puz_2800": 0.027, "matches": [{"opp": "models/vibefish_v3.pt", "movetime": 0.1, "W": 74, "D": 73, "L": 53, "score": 0.552}]}
 {"model": "models/vibefish_v4_main_ema.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 42, "D": 31, "L": 47, "score": 0.479, "perf_elo": 1986}]}
 {"model": "models/vibefish_v4_main_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "models/vibefish_v4_main_ema.pt", "movetime": 0.1, "W": 71, "D": 65, "L": 64, "score": 0.517}]}
+{"model": "models/vibefish_v4_main_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 90, "D": 44, "L": 66, "score": 0.56, "perf_elo": 2042}]}
+{"model": "models/vibefish_v4_main_ema.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 85, "D": 39, "L": 76, "score": 0.522, "perf_elo": 2016}]}
+{"model": "models/vibefish_v3.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 72, "D": 45, "L": 83, "score": 0.472, "perf_elo": 1981}]}
+{"model": "models/vibefish_v4_main_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "models/vibefish_v3.pt", "movetime": 0.1, "W": 88, "D": 66, "L": 46, "score": 0.605}]}
