@@ -301,7 +301,17 @@ Everything that can make v4 as strong as possible, roughly by expected gain per 
 13. **Tune `--mix`** (policy + action-value blend) on held-out and a 100-game match; v4's
     action-value head is trained on far more every-move data than v2's was. [CPU]
     *Held-out / puzzles, v4 main EMA:* mix 0: 0.0232 / 59.1%; 0.5: 0.0234 / 59.4%; 1: 0.0235 / 59.9%;
-    **2: 0.0229 / 60.2%**; 4: 0.0235 / 60.3%; 8: 0.0243 / 59.6%; 16: 0.0247 / 59.1%. The 200-game match of mix 2 vs mix 0 is below.
+    **2: 0.0229 / 60.2%**; 4: 0.0235 / 60.3%; 8: 0.0243 / 59.6%; 16: 0.0247 / 59.1%.
+    *Matches (200 games each; same game numbers get the same 4 random opening plies, so the SF rows share openings):*
+
+    | v4 main EMA | vs v3 | vs SF 2000 (perf) |
+    |---|---|---|
+    | mix 0 | 55.2% (+74 =73 −53) | 52.2% (+85 =39 −76, 2016) |
+    | **mix 2** | **60.5%** (+88 =66 −46) | **56.0%** (+90 =44 −66, 2042) |
+    | v3 (mix 0) | | 47.2% (+72 =45 −83, 1981) |
+
+    Mix 2 vs mix 0 head-to-head: 51.7%. The action-value head helps most against Stockfish.
+    `play.py --mix` added. **Ship with mix 2.** The earlier 120-game 47.9% for mix 0 was noise.
 14. **Mirror averaging** for positions without castling rights (left-right flip, average the
     two policies): two passes of the same network on the same position, allowed by the rules (item 18). [code]
 
