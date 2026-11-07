@@ -1,84 +1,35 @@
-# Handoff (2026-11-06, ~20:05 UTC)
+# Handoff (2026-11-07, ~15:00 UTC)
 
 State of the work when it was paused, and what to do next. Read `CLAUDE.md` and `PLAN.md` too.
 
 ## Where things stand
 
-- **Shipped:** `models/vibefish_v3.pt` (6.7M params, d=256, 8 layers). v1 is in `models/v1/`
-  (`evaluate.py --v1 models/v1`, `--vs v1:models/v1`).
-- **v3.1 experiment** (two 4 h fine-tunes from v3, lr 2e-4, both on Kaggle 2×T4):
-  - `vibefish-v31-control` (our data only): **done, not shipped.** Even with v3: 50.5% head-to-head
-    (+36 =29 −35), SF 2000 46.7% (v3 48.7%), puzzles 58.8% (v3 59.3%), held-out wp_lost 0.0252 /
-    top1 52.9% (v3 0.028 / 52.2%). Lesson: more training on the same data no longer helps v3.
-  - `vibefish-v31-cb` (35% ChessBench best-move data, CB1 = positions 0–20M): **was still training**,
-    pushed 16:36 UTC, 240 min, so done ~20:45 UTC. Not benchmarked yet.
-  - ChessBench shards on Kaggle: `vibefish-cb-1` (CB1_00–19, 20M) and `vibefish-cb-2` (positions
-    20–40M) are both complete. cb-2 is unused so far. (`kaggle kernels output` lists sizes as
-    "822"; the real files are ~484 MB each, per the kernel log.)
-- **Evaluation check (done):** Stockfish's `UCI_Elo` is calibrated at 60s+0.6s, but our
-  matches gave it 0.1 s/move, so our perf Elo numbers might have been inflated. Checked with
-  `evaluate.py --movetime 1.0`: v3 vs SF 2000 at 1 s/move scored **50.0%** (+22 =16 −22, 60 games,
-  `games/v3_vs_sf2000_1s_run2.pgn`) and, in a second session's run, **52.5%** (+23 =17 −20,
-  `games/v3_vs_sf2000_1s.pgn`), vs 48.7% at 0.1 s. Stockfish's limited strength barely changes with
-  more time, so the 0.1 s numbers stand (still on Stockfish's scale, not Lichess/FIDE). The owner's "v3 plays a lot of h4" worry was checked: early h4/...h5
-  appears in 19% of v3's games vs 21–30% for Stockfish 1320–2000 in the same matches, so not a bug.
+- **Shipped: v4** = `models/vibefish_v4.pt` (copy of `vibefish_v4_ft_ema.pt`; 13.6M params, d=256,
+  16 layers + square-pair attention bias), played with `--mix 2` (`play.py`'s default). Every step
+  of v4 is kept in `models/` (pilots A/B, main, main EMA, fine-tune, fine-tune EMA). v3 and v1 stay too.
+- **v4's numbers** (mix 2; README table, `bench/results.jsonl`): puzzles 63.5% (v3 59.3%), held-out
+  0.0231 / 54.7%, vs v3 66.5% (200 games), vs v4-main 61.5%, SF 2000 56.2% (perf 2044; v3 47.2% on
+  the same 200 openings), SF 2400 33% (2277), SF 1600 80%, SF 1320 97%, random +117 =3 −0.
+- **Where it loses** (`bench/blunders.py`, vs SF 2000): middlegame 70% of the lost win prob, 42 of
+  50 big blunders. The endgame is not the weak spot.
+- **Running:** self-play **D5** (`vibefish-d5-1` / `-2`, Kaggle CPU): 4,000 games from the v4 main
+  EMA, graded at **depth 12**, 500-game chunks `D5_10`–`D5_23`. Started 2026-11-07 ~10:45 UTC; a
+  depth-8 chunk took 20 min, depth 12 is slower.
+- **Unexplained:** the main run slowed ~15× after 7.3 h with no error. The 3 h fine-tune had no
+  slowdown. Long runs should log often (`--eval-every 2000`).
 
 ## Next steps, in order
 
-1. ~~Benchmark the ChessBench run~~ done, not shipped (50% vs v3, 47.5% vs SF 2000; PLAN v3.1). Commands used:
-   ```bash
-   kaggle kernels output yunus0901/vibefish-v31-cb -p kaggle_out/vibefish-v31-cb --file-pattern '(runs/|\.log$)'
-   ```
-   ```bash
-   python evaluate.py --model kaggle_out/vibefish-v31-cb/runs/v31_cb/model.pt --puzzles --heldout --vs models/vibefish_v3.pt --games 100 --pgn games/v31_cb_vs_v3.pgn --log bench/results.jsonl
-   ```
-   ```bash
-   python evaluate.py --model kaggle_out/vibefish-v31-cb/runs/v31_cb/model.pt --match 2000 --games 120 --pgn games/v31_cb_sf.pgn --log bench/results.jsonl
-   ```
-   Ship as v3.1 only if it clearly beats v3 head-to-head (≥ ~57% over 100 games). If it ships:
-   copy to `models/vibefish_v3_1.pt`, update the `play.py`/`evaluate.py` defaults, README and the
-   credit line "Trained in part on ChessBench (DeepMind, CC-BY 4.0)". Either way, record the result
-   in PLAN.md (v3.1 section) and copy its `log.jsonl` to `bench/train_logs/v31_cb.jsonl`.
-2. ~~Time-control check~~ done: v3 vs SF 2000 at 1 s/move, two 60-game runs: 52.5% and 50.0% (48.7% at 0.1 s). Elo figures stand.
-3. **v4** (owner's direction: bigger and deeper, ≤ 14M; v3 isn't strong enough).
+1. When D5 is done, check its log (`model's own moves lost ...`, chunk times). Then run a 2–3 h
+   fine-tune from `models/vibefish_v4.pt` (no `--grow`; `--boost-from 8 --boost 2` or none, lr ~5e-5)
+   with D5 ~25%, D4 10%, every-move data ≥ 50%. Mirror `vibefish-v4-ft`'s command (PLAN v4 C11 /
+   README). Its `opt.pt` is in the `vibefish-v4-ft` output if continuing that optimizer.
+2. Gate: 200 games vs `models/vibefish_v4.pt@2` (both at `--mix 2`) plus 200 vs SF 2000 / 2400.
+   Ship as v4.1 only if it wins head-to-head and isn't worse against Stockfish.
+3. Then PLAN v4 items: mirror averaging (D14), HL-Gauss value heads (C12), tablebases only if
+   endgames start to matter.
 
-## v4 status (2026-11-07, ~10:30 UTC)
-
-- **Pilots done** (PLAN.md v4 section A has the table). A (16 layers + bias) scored 53% vs v3 and
-  B 48.5%, both within noise. The 8 added layers barely trained (weight norm ~3 vs ~70), so
-  `train.py --boost-from 8 --boost 5` now gives them 5× lr. Both models are in `models/`.
-- **Main run done** (2026-11-07 09:50 UTC; PLAN item C11 has the details). 200 games vs v3:
-  the EMA scored **55.2%** and the plain weights 53.7%. Both models are in `models/`
-  (`vibefish_v4_main.pt`, `vibefish_v4_main_ema.pt`). Its last ~3 h ran ~15× slower for no visible reason.
-- **Self-play D4 done:** 4,000 games from pilot A, 311k positions (`D4_10`–`D4_23` in the
-  `vibefish-d4-1` / `-2` outputs). Its own moves lose 0.0247 wp on average (D3: 0.027).
-- **Fine-tune running:** `vibefish-v4-ft`, 3 h, from the main run's `ema.pt` + `opt.pt`, lr 1e-4,
-  with CB4 30%, D4 15% and L2_10–19 (unused so far) in the mix. Benchmark its `model.pt` and `ema.pt`
-  with 200 games vs v3 and vs `models/vibefish_v4_main_ema.pt`.
-- **Ship gate met by the main-run EMA with `--mix 2`:** 60.5% vs v3 head-to-head and 56.0% vs
-  SF 2000, perf 2042. On the same 200 openings, v3 scored 47.2% and plain v4 52.2%. Before shipping,
-  compare it with the fine-tune (`vibefish-v4-ft`) and ship the better one as
-  `models/vibefish_v4.pt`, with `play.py` defaulting to that model and `--mix 2`.
-
-## v4 plan (agreed in chat)
-
-Owner's rules: **≤ 14M params** (raised from 10M for v4: "bigger but not too big"), one forward
-pass per move, no search; DeepMind models only as opponents, ChessBench data allowed with credit.
-
-- **Architecture** (same width d=256 so v3's weights seed it): **16 layers** instead of 8, plus
-  the **square-pair attention bias** (`[layers, heads, 68, 68]`, PLAN item 6). 13.6M params with
-  the bias, ~27 MB at fp16. **Loops dropped:** with params allowed, 2 passes through N layers cost
-  as much as 2N real layers with half the weights. The code still supports `--loops`.
-- **Code (done, PR #18):** `ChessGPT(loops=, bias=)`, `model.grow`, `train.py --init ... --grow
-  --layers 16 --attn-bias`. Added layers start as identity, so grown-from-v3 plays exactly like v3
-  (tested). The bias is cast to the query dtype for fp16 autocast. Untested on GPU so far.
-- **Pilots (~2 h each, in parallel on Kaggle, both grown from v3):** A = 16 layers + bias,
-  B = 16 layers, no bias. Compare held-out and head-to-head vs v3. Same mix as the v3.1 winner.
-- **Main run:** continue the pilot winner (`--init` its model.pt, no `--grow`) for 8–10 h. Expect
-  ~2× slower per position than v3 (~1,800 pos/s on 2×T4, ~65M positions per 10 h). Use
-  ChessBench (CB1 + cb-2's CB2) in the mix if the v3.1 CB run helped.
-- **Budget:** 30 GPU h/week on Kaggle; the v3.1 runs used ~8 h this week.
-- **Gate:** ship v4 only if it beats v3 (or v3.1) head-to-head and against Stockfish.
+GPU budget: the pilots, main run and fine-tune used ~17 GPU h of this week's 30.
 
 ## Gotchas
 

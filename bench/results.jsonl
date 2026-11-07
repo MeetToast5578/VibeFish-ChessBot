@@ -43,3 +43,5 @@
 {"model": "models/vibefish_v4_ft_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "models/vibefish_v3.pt", "movetime": 0.1, "W": 106, "D": 54, "L": 40, "score": 0.665}]}
 {"model": "models/vibefish_v4_ft_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 86, "D": 53, "L": 61, "score": 0.562, "perf_elo": 2044}]}
 {"model": "models/vibefish_v4_ft_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "2400", "movetime": 0.1, "W": 38, "D": 56, "L": 106, "score": 0.33, "perf_elo": 2277}]}
+{"model": "models/vibefish_v4_main_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "2400", "movetime": 0.1, "W": 32, "D": 52, "L": 116, "score": 0.29, "perf_elo": 2244}]}
+{"model": "models/vibefish_v4_ft_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "random", "movetime": 0.1, "W": 117, "D": 3, "L": 0, "score": 0.988}, {"opp": "1320", "movetime": 0.1, "W": 113, "D": 6, "L": 1, "score": 0.967, "perf_elo": 1905}, {"opp": "1600", "movetime": 0.1, "W": 86, "D": 19, "L": 15, "score": 0.796, "perf_elo": 1836}]}

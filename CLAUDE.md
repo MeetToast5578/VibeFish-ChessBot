@@ -48,5 +48,5 @@ Strength must come from data, features, losses and training.
   `KaggleApi._introspect_token` to skip that check. Never print or commit tokens.
 - Kaggle hides a running kernel's logs and outputs; poll `kaggle kernels status`, then
   `kaggle kernels output`. Sessions stop at 12 h, so keep CPU grading jobs to ≤ 4 h or split them.
-- Shipped model: `models/vibefish_v3.pt` (6.7M params, d=256, 8 layers). Compare new candidates
-  against it with `evaluate.py --vs models/vibefish_v3.pt` and the Stockfish matches.
+- Shipped model: `models/vibefish_v4.pt` (13.6M params, d=256, 16 layers + attention bias, played with `--mix 2`). Compare new candidates
+  against it with `evaluate.py --mix 2 --vs models/vibefish_v4.pt@2` and the Stockfish matches.
