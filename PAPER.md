@@ -356,9 +356,12 @@ Lichess evals L/L2 (25%), every-move-graded puzzle positions S2 (20%) and all si
 | held-out wp lost / top1 | 0.086 / 33% | **0.031 / 50.5%** | 0.054 / 42% | 0.028 / 52% |
 | vs random (120) | +19 =99 −2 | **+113 =7 −0** | +106 =14 −0 | +118 =2 −0 |
 | vs SF 1320 / 1600 / 2000 (120) | 12% / – / – | **87.5% / 67.9% / 35.0%** | 52% / 26% / 12% | 92% / 73% / 49% |
+| performance vs SF 1320 / 1600 / 2000 | ~975 / – / – | **1,658 / 1,730 / 1,892** | – | – / – / 1,981 |
 | head-to-head, 200 games | | **93.0% vs old v1, 89.0% vs v2, 38.5% vs v3** | | |
 
-The EMA weights are used; `mix = 2` gave 38.3% (perf 1,917) against SF 2000 over 120 games, within noise
+**v1.1's rating is about 1,900** on Stockfish's `UCI_Elo` scale at 0.1 s per move, taken from the SF 2000
+match, whose score is nearest 50% and so the most informative; lopsided wins against SF 1320/1600
+understate it. The scale is Stockfish's own, not FIDE or Lichess. The EMA weights are used; `mix = 2` gave 38.3% (perf 1,917) against SF 2000 over 120 games, within noise
 of policy-only, and cost a point on puzzles. **The same 0.89M network that drew 99 of 120 games against
 a random mover now beats the 3.3× larger v2 89% and plays at about v3-stage-1 strength.** Data, labels
 and training method account for most of the distance from v1 to v3; parameters account for the rest

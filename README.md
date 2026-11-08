@@ -45,9 +45,13 @@ since, trained from scratch for 3 h on one T4 (101M positions). Policy only:
 | held-out wp lost / top1 | 0.086 / 33% | **0.031 / 50.5%** | 0.054 / 42% | 0.028 / 52% |
 | vs random (120) | +19 =99 −2 | **+113 =7 −0** | +106 =14 −0 | +118 =2 −0 |
 | vs SF 1320 / 1600 / 2000 (120) | 12% / – / – | **87.5% / 67.9% / 35.0%** | 52% / 26% / 12% | 92% / 73% / 49% |
+| perf Elo vs SF 1320 / 1600 / 2000 | – | **1,658 / 1,730 / 1,892** (SF 2000 with `--mix 2`: 38.3%, 1,917) | – | – / – / 1,981 |
 | head-to-head, 200 games | | **93.0% vs old v1, 89.0% vs v2, 38.5% vs v3** | | |
 
-The same tiny network goes from drawing a random mover to beating v2 89%. Details: `PAPER.md` §4.8.
+The same tiny network goes from drawing a random mover to beating v2 89%. **v1.1 plays at about
+1,900** on Stockfish's `UCI_Elo` scale (0.1 s per move). The SF 2000 match is the one to trust, since
+its score is closest to 50%; the lopsided wins against weaker levels understate it. v4.1 is ~2,100
+there, at 15× the parameters. Details: `PAPER.md` §4.8.
 
 On Stockfish's limited-strength scale (at 0.1 s per move) v4 performs at **~2,040** against
 SF 2000 and 2,277 against SF 2400. v3 performs at 1,981 against SF 2000, v2 at ~1,350–1,650 and
