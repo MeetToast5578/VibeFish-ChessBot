@@ -159,7 +159,7 @@ def match(pool, elo, games, pgn=None, me="VibeFish", opp=None, movetime=0.1):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="models/vibefish_v4.pt")
+    p.add_argument("--model", default="models/vibefish_v4_1.pt")
     p.add_argument("--v1", help="VibeFish v1 dir, e.g. models/v1 (evaluates v1 instead)")
     p.add_argument("--mix", type=float, default=0.0, help="weight of the action-value head in the move choice")
     p.add_argument("--strip-history", action="store_true", help="hide move history from the model")

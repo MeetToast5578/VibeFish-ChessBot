@@ -56,12 +56,12 @@ def uci(pick, name):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="models/vibefish_v4.pt")
+    p.add_argument("--model", default="models/vibefish_v4_1.pt")
     p.add_argument("--uci", action="store_true")
-    p.add_argument("--mix", type=float, default=2.0, help="weight of the action-value head in the move choice (still one forward pass; v4 is tuned for 2)")
+    p.add_argument("--mix", type=float, default=2.0, help="weight of the action-value head in the move choice (still one forward pass; v4 and v4.1 are tuned for 2)")
     p.add_argument("--black", action="store_true", help="play black against the bot")
     a = p.parse_args()
     torch.set_num_threads(1)
     net = load(a.model)
     pick = lambda b: net.pick(b, mix=a.mix)
-    uci(pick, "VibeFish v4") if a.uci else human(pick, not a.black)
+    uci(pick, "VibeFish v4.1") if a.uci else human(pick, not a.black)
