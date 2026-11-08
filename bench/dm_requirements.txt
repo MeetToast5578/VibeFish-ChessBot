@@ -1,0 +1,15 @@
+# Venv for bench/dm_uci.py (DeepMind's searchless_chess code). Their code needs a JAX that still has
+# jax.sharding.PositionalSharding; this set loads the 9M/136M/270M checkpoints (tested on Python 3.13).
+jax[cpu]==0.4.35
+jaxlib==0.4.35
+chex==0.1.87
+dm-haiku==0.0.13
+flax==0.10.1
+orbax-checkpoint==0.9.1
+optax==0.2.4
+grain
+apache-beam
+jaxtyping
+chess
+scipy
+absl-py
