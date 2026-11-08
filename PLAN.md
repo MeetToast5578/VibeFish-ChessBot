@@ -231,6 +231,14 @@ Original plan:
 14. **Horizontal-flip augmentation** for positions without castling rights.
 15. **Analyse the draws against the random mover** (stalemate? repetition? 50-move rule?).
 
+### v1 retrained (2026-11-08)
+
+`vibefish-v1-retrain`: d=128, 4 layers, 4 heads (0.89M), from scratch, 180 min on one T4 (~9,400
+pos/s), lr 1e-3, batch 1024, EMA, mix CB3 0.3 / L 0.1 / L2_0* 0.15 / S2 0.2 / S_0, S_puz 0.03 /
+D1–D6 0.22; 101M positions. EMA: puzzles 58.4%, held-out 0.031 / 50.5%. 200 games: 93.0% vs v1,
+89.0% vs v2, 38.5% vs v3. 120 games: random +113 =7 −0, SF 1320 87.5% (1658), SF 1600 67.9% (1730),
+SF 2000 35.0% (1892; mix 2: 38.3%, 1917). Lesson: data and method, not size, made most of v1→v3.
+
 ### v4.2: D6 self-play round (not shipped, 2026-11-08)
 
 D6: 4,000 games from v4.1 at depth 12, 320k positions, own moves lose 0.0222 wp (D5: 0.0236).
