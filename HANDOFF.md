@@ -24,8 +24,8 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
    12:31 UTC, 150 min from the `vibefish-v41-ft` output's `ema.pt`, lr 5e-5, D6 25% / D5 15% / D4 5% /
    CB4 15% / L, L2_1*, S2, D3, S_puz, D1, D2. **Result: not shipped.** 46.0% vs v4.1 head to head,
    SF 2000 62.0% (v4.1 64.0%), but SF 2400 42.0% (v4.1 33.0%). Models kept as
-   `models/vibefish_v42_ft.pt` / `_ema.pt`. Next: rerun SF 2400 (200 more games each for v4.1 and
-   v4.2-EMA, different openings via evaluate.py's game numbering) to see if the jump is real.
+   `models/vibefish_v42_ft.pt` / `_ema.pt`. The SF 2400 jump was noise: a rerun gave v4.2 38.3%, v4.1
+   39.3% (400 games: 40.1% vs 36.1%, ~1σ). SF 200-game runs swing ~6 points; use 400 for close calls.
 1. **Self-play D6 from v4.1: started 02:08 UTC** (`vibefish-d6-1` / `-2`, seeds 160000–171500,
    puzzle rows from 4.8M, chunks `D6_10`–`D6_23`, done ~10:45 UTC). It was set up at depth 12 (same command as D5 with `--model` = the
    `vibefish-v41-ft` output's `runs/v41_ft/ema.pt`, new seeds and puzzle rows, e.g. seeds 150000+,

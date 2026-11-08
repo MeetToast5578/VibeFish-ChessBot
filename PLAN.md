@@ -235,11 +235,11 @@ Fine-tune `vibefish-v42-ft`: 150 min from v4.1's EMA, lr 5e-5, D6 25% / D5 15% /
 the rest every-move data; 21.3M positions. `models/vibefish_v42_ft.pt` / `_ema.pt`. EMA, mix 2,
 200 games: **46.0% vs v4.1** (+56 =72 −72), SF 2000 62.0% (2085; v4.1 64.0%), **SF 2400 42.0%**
 (+53 =62 −85, 2344; v4.1 33.0%). Puzzles 64.2%, held-out 0.0228 (v4.1 64.3%, 0.0227).
-Fails the gate (loses head to head), so v4.1 stays. The SF 2400 jump (+9 points on the same
-openings, ~2σ) is the open question: confirm with another 200 games at SF 2400 for both before
-reading anything into it. Possible reading: the D6/D5-heavy mix (40% self-play) makes it play
-more like Stockfish wants and less like itself. Next try: less self-play weight, or D6 with fresh
-ChessBench only.
+Fails the gate (loses head to head), so v4.1 stays. The SF 2400 jump was noise: a second
+200-game run gave v4.2 38.3% and v4.1 39.3%. Over 400 games, v4.2 40.1% vs v4.1 36.1%, ~1σ.
+**Lesson:** the same model moves ~6 points between two 200-game SF runs (Stockfish at 0.1 s is not
+deterministic), so SF differences under ~7 points need 400+ games. A second self-play round on top
+of v4.1 with 40% self-play weight did not help; next try a lower self-play weight or new data types.
 
 ### v4.1: one more self-play round (shipped 2026-11-08)
 
