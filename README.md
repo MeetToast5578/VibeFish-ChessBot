@@ -33,6 +33,22 @@ Both heads come out of the same pass. Benchmarks live in `bench/` and are never 
 every move graded by Stockfish at **depth 12** instead of 8, 25% of the mix. It beats v4 56.8% head to head
 (about +47 Elo) and scores 64% against SF 2000 (perf 2,100; v4 56%). Against SF 2400 it ties v4 (33%).
 
+**v1 retrained** (`models/vibefish_v1_retrain_ema.pt`): v1's size (0.89M) with everything learned
+since, trained from scratch for 3 h on one T4 (101M positions). Policy only:
+
+| | old v1 | **v1 retrained** | v2 | v3 |
+|---|---|---|---|---|
+| parameters | 0.88M | **0.89M** | 2.9M | 6.7M |
+| positions seen in training | ~0.4M | **101M** | ~2M | ~67M |
+| compute | 2 CPU cores, 1 h | **1×T4, 3 h** | 4 CPU cores, ~4.5 h | 2×T4, 5 h |
+| puzzles solved | 10.5% | **58.4%** | 39.1% | 59.3% |
+| held-out wp lost / top1 | 0.086 / 33% | **0.031 / 50.5%** | 0.054 / 42% | 0.028 / 52% |
+| vs random (120) | +19 =99 −2 | **+113 =7 −0** | +106 =14 −0 | +118 =2 −0 |
+| vs SF 1320 / 1600 / 2000 (120) | 12% / – / – | **87.5% / 67.9% / 35.0%** | 52% / 26% / 12% | 92% / 73% / 49% |
+| head-to-head, 200 games | | **93.0% vs old v1, 89.0% vs v2, 38.5% vs v3** | | |
+
+The same tiny network goes from drawing a random mover to beating v2 89%. Details: `PAPER.md` §4.8.
+
 On Stockfish's limited-strength scale (at 0.1 s per move) v4 performs at **~2,040** against
 SF 2000 and 2,277 against SF 2400. v3 performs at 1,981 against SF 2000, v2 at ~1,350–1,650 and
 v1 at ~975. Against weak opponents the perf numbers say little (v4 has 1 loss in 120 games
@@ -173,6 +189,7 @@ without AMX) and ~34 positions/s/core for Stockfish grading every move at depth 
 | `models/vibefish_v4_1.pt` | **the shipped v4.1 weights** (fp16, 27 MB; copy of `vibefish_v41_ft_ema.pt`) |
 | `models/vibefish_v4.pt` | the v4 weights (fp16, 27 MB; the fine-tune's EMA) |
 | `models/vibefish_v41_ft.pt`, `vibefish_v41_ft_ema.pt` | the v4.1 fine-tune (plain weights / EMA) |
+| `models/vibefish_v1_retrain.pt`, `vibefish_v1_retrain_ema.pt` | v1's size (0.89M) retrained with the current recipe |
 | `models/vibefish_v3.pt` | the v3 weights (fp16, 13.4 MB) |
 | `models/vibefish_v4_pilot_{a,b}.pt`, `vibefish_v4_main.pt`, `vibefish_v4_main_ema.pt`, `vibefish_v4_ft.pt`, `vibefish_v4_ft_ema.pt` | v4's steps, kept for comparison (`vibefish_v4.pt` is a copy of `_ft_ema`) |
 | `models/vibefish_v2.pt` | the v2 weights (fp16, ~6 MB) |
