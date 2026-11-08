@@ -48,15 +48,21 @@ def make_pick(spec):
         net.load_state_dict(torch.load(weights if os.path.exists(weights) else os.path.join(path, "run/model.pt")))
         net.eval()
         return lambda b: net.pick(b)
+    if kind == "uci":   # any UCI engine, e.g. bench/dm_uci.py; no timeout, big models are slow on CPU
+        eng = chess.engine.SimpleEngine.popen_uci(path.split(), timeout=None)
+        return lambda b: eng.play(b, chess.engine.Limit(time=1)).move
     from model import load, without_history
     net = load(path)
     return lambda b: net.pick(without_history(b) if strip else b, mix=mix)
 
 
 def spec_of(arg):
-    """'v1:<dir>' (e.g. v1:models/v1) -> v1 spec, anything else -> a model path, optionally 'path@mix'."""
+    """'v1:<dir>' (e.g. v1:models/v1) -> v1 spec, 'uci:<command>' -> a UCI engine, anything else -> a
+    model path, optionally 'path@mix'."""
     if arg.startswith("v1:"):
         return ("v1", arg[3:], None, False)
+    if arg.startswith("uci:"):
+        return ("uci", arg[4:], None, False)
     path, _, mix = arg.partition("@")
     return ("v2", path, float(mix or 0), False)
 

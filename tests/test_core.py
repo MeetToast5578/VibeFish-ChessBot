@@ -119,3 +119,4 @@ def test_opponent_spec_takes_a_mix():
     assert evaluate.spec_of("models/a.pt@2") == ("v2", "models/a.pt", 2.0, False)
     assert evaluate.spec_of("models/a.pt") == ("v2", "models/a.pt", 0.0, False)
     assert evaluate.spec_of("v1:models/v1")[:2] == ("v1", "models/v1")
+    assert evaluate.spec_of("uci:sh dm.sh 9M")[:2] == ("uci", "sh dm.sh 9M")
