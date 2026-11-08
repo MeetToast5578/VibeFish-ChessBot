@@ -183,6 +183,9 @@ instead: 527M positions, each with Stockfish 16's best move (50 ms/move).
       | v3.1 control | 0.0252 / 52.9% | 58.8% | 50.5% | 46.7% |
       | v3.1 ChessBench | 0.0243 / 54.3% | 59.1% | 50.0% | 47.5% |
 
+      A second session ran the same SF 2000 match for v3.1 ChessBench: 52.5% (+50 =26 −44, perf 2017,
+      `games/v31_cb_sf_run2.pgn`). Over 240 games it is 50.0%, even with v3 there too.
+
       Lesson: at 6.7M params v3 is saturated. More data (even 18M new ChessBench positions)
       improves held-out accuracy a little but not play. Capacity is the limit, so v4 goes bigger.
 
