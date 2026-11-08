@@ -17,10 +17,14 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 - **Where it loses** (v4, `bench/blunders.py` vs SF 2000): middlegame 70% of the lost win prob.
   Rerun it on `games/v41_ema_sf2000_2400.pgn` to see whether D5 moved that.
 
-- **v1 retrained** (2026-11-08, `models/vibefish_v1_retrain_ema.pt`): v1's 0.89M size with the
+- **v1.1** (2026-11-08, `models/vibefish_v1_1_ema.pt`): v1's 0.89M size with the
   current recipe, 3 h on one T4, 101M positions. Puzzles 58.4%, 93% vs old v1, 89% vs v2, 38.5% vs v3,
   SF 2000 35%. Not a ship candidate (v4.1 is far stronger); it is the "same size, better method" study
   in PAPER.md §4.8. Its loss was still falling: a longer run or a self-play round would add more.
+
+- **v2.1 training** (`vibefish-v2-1`, launched 2026-11-08 21:07 UTC): v2's size (d=192, 6 layers, 6 heads,
+  2.9M) with exactly v1.1's recipe (same mix, 180 min on one T4, lr 1e-3, EMA, from scratch). Equal GPU time,
+  so v1.1 vs v2.1 is the first VibeFish X data point (size at a fixed compute budget).
 
 ## Next steps, in order
 

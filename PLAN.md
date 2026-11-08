@@ -231,7 +231,7 @@ Original plan:
 14. **Horizontal-flip augmentation** for positions without castling rights.
 15. **Analyse the draws against the random mover** (stalemate? repetition? 50-move rule?).
 
-### v1 retrained (2026-11-08)
+### v1.1: v1's size retrained (2026-11-08)
 
 `vibefish-v1-retrain`: d=128, 4 layers, 4 heads (0.89M), from scratch, 180 min on one T4 (~9,400
 pos/s), lr 1e-3, batch 1024, EMA, mix CB3 0.3 / L 0.1 / L2_0* 0.15 / S2 0.2 / S_0, S_puz 0.03 /

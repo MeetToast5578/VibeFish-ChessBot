@@ -337,7 +337,7 @@ recipe, at a 40% self-play share, did not add strength.
 
 ---
 
-### 4.8 v1 retrained: the same size with everything we learned
+### 4.8 v1.1: v1's size retrained with everything we learned
 
 To separate what came from scale from what came from data and method, we trained a fresh model at
 **v1's size** (d = 128, 4 layers, 4 heads, 0.89M parameters) with the current encoding, heads, labels
@@ -345,9 +345,9 @@ and losses, from random weights. Training: 3 h on one T4 at lr 1e-3 with cosine 
 EMA, ~9,400 positions/s, **101M positions seen** (~250× v1's ~0.4M samples; drawn from ~41M distinct
 positions, ~510× v1's 80k), from a mix of ChessBench CB3 (30%),
 Lichess evals L/L2 (25%), every-move-graded puzzle positions S2 (20%) and all six self-play sets D1–D6
-(22%), which carry the move history. No attention bias. `models/vibefish_v1_retrain.pt` / `_ema.pt`.
+(22%), which carry the move history. No attention bias. `models/vibefish_v1_1.pt` / `_ema.pt`.
 
-| | old v1 | **v1 retrained** | v2 | v3 |
+| | old v1 | **v1.1** | v2 | v3 |
 |---|---|---|---|---|
 | parameters | 0.88M | **0.89M** | 2.9M | 6.7M |
 | positions seen in training | ~0.4M | **101M** | ~2M | ~67M |
@@ -362,7 +362,7 @@ The EMA weights are used; `mix = 2` gave 38.3% (perf 1,917) against SF 2000 over
 of policy-only, and cost a point on puzzles. **The same 0.89M network that drew 99 of 120 games against
 a random mover now beats the 3.3× larger v2 89% and plays at about v3-stage-1 strength.** Data, labels
 and training method account for most of the distance from v1 to v3; parameters account for the rest
-(the retrained v1 is ~80 Elo below v3). Its held-out loss was still falling at the end of the run.
+(v1.1 is ~80 Elo below v3). Its held-out loss was still falling at the end of the run.
 
 ## 5. Results summary
 
@@ -406,7 +406,7 @@ grading and ChessBench conversion.
    (it lost to policy-only in v2, won in v4).
 9. **Games decide, and they are noisy.** Held-out loss misled us more than once; 200-game Stockfish
    matches swing by ±6 points.
-10. **Data and method beat size at this scale.** Retrained with everything above, v1's 0.89M network
+10. **Data and method beat size at this scale.** Retrained with everything above as v1.1, v1's 0.89M network
     beat the 2.9M v2 89% and came within ~80 Elo of the 6.7M v3 (§4.8).
 11. **Free compute is enough to get to ~2,000 on Stockfish's scale.** fp16 on both T4s, shard-wise
     data loading, CPU notebooks for grading, and long jobs split into resumable chunks.
