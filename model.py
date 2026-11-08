@@ -85,16 +85,30 @@ def encode(board: chess.Board) -> np.ndarray:
     return x
 
 
+def block(layer: nn.TransformerEncoderLayer, h, bias=None):
+    """layer's pre-norm forward (dropout 0, gelu) with an optional [heads, S, S] additive attention bias."""
+    a = layer.self_attn
+    B, S, D = h.shape
+    q, k, v = F.linear(layer.norm1(h), a.in_proj_weight, a.in_proj_bias).view(B, S, 3, a.num_heads, -1).permute(2, 0, 3, 1, 4)
+    o = F.scaled_dot_product_attention(q, k, v, attn_mask=None if bias is None else bias.to(q.dtype))
+    h = h + a.out_proj(o.transpose(1, 2).reshape(B, S, D))
+    return h + layer.linear2(F.gelu(layer.linear1(layer.norm2(h))))
+
+
 class ChessGPT(nn.Module):
-    def __init__(self, d=128, layers=4, heads=4):
+    def __init__(self, d=128, layers=4, heads=4, loops=1, bias=False):
         super().__init__()
-        self.cfg = dict(d=d, layers=layers, heads=heads)
+        self.cfg = dict(d=d, layers=layers, heads=heads, loops=loops, bias=bias)
         self.sq_emb = nn.ModuleList(nn.Embedding(n, d) for n in SQ_FEATS)
         self.gl_emb = nn.ModuleList(nn.Embedding(n, d) for n in GLOBAL_FEATS)
         self.pos = nn.Parameter(torch.randn(SEQ, d) * 0.02)
         layer = nn.TransformerEncoderLayer(d, heads, 4 * d, dropout=0.0, batch_first=True,
                                            norm_first=True, activation="gelu")
         self.body = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
+        # loops: run the layer stack this many times (shared weights, learned offset per pass)
+        self.loop_emb = nn.Parameter(torch.zeros(loops, d)) if loops > 1 else None
+        # learned additive attention bias per layer, head and square pair (a light "smolgen")
+        self.attn_bias = nn.Parameter(torch.zeros(layers, heads, SEQ, SEQ)) if bias else None
         self.norm = nn.LayerNorm(d)
         self.pq, self.pk = nn.Linear(d, d), nn.Linear(d, d)   # policy: from-square . to-square
         self.aq, self.ak = nn.Linear(d, d), nn.Linear(d, d)   # action value: same shape, sigmoid -> win prob
@@ -106,7 +120,13 @@ class ChessGPT(nn.Module):
         x = x.long()
         sq = sum(e(x[:, :64, i]) for i, e in enumerate(self.sq_emb))
         gl = torch.stack([e(x[:, 64 + j, 0]) for j, e in enumerate(self.gl_emb)], 1)
-        h = self.norm(self.body(torch.cat([sq, gl], 1) + self.pos))
+        h = torch.cat([sq, gl], 1) + self.pos
+        for p in range(self.cfg["loops"]):
+            if self.loop_emb is not None:
+                h = h + self.loop_emb[p]
+            for i, layer in enumerate(self.body.layers):
+                h = block(layer, h, None if self.attn_bias is None else self.attn_bias[i])
+        h = self.norm(h)
         s = h[:, :64]
         scale = 1 / math.sqrt(self.d)
         policy = (self.pq(s) @ self.pk(s).transpose(1, 2) * scale).flatten(1)
@@ -137,6 +157,19 @@ class ChessGPT(nn.Module):
 def save(model: ChessGPT, path: str, **extra):
     sd = {k: v.half() if v.is_floating_point() else v for k, v in model.state_dict().items()}
     torch.save({"cfg": model.cfg, "encoding": ENCODING_VERSION, "state": sd, **extra}, path)
+
+
+def grow(src: ChessGPT, layers, loops=1, bias=False) -> ChessGPT:
+    """Depth up-scaling: src's weights in a deeper model. Added layers start as identity
+    (out_proj and linear2 zeroed, pre-norm), bias and loop offsets start at zero."""
+    m = ChessGPT(src.cfg["d"], layers, src.cfg["heads"], loops, bias)
+    missing, unexpected = m.load_state_dict(src.state_dict(), strict=False)
+    assert not unexpected, unexpected
+    for layer in m.body.layers[src.cfg["layers"]:]:
+        for lin in (layer.self_attn.out_proj, layer.linear2):
+            nn.init.zeros_(lin.weight)
+            nn.init.zeros_(lin.bias)
+    return m
 
 
 def load(path: str) -> ChessGPT:

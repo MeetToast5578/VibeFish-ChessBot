@@ -70,6 +70,23 @@ def test_model_picks_legal_moves():
     assert p.shape == a.shape == (1, 4096) and v.shape == (1,)
 
 
+def test_block_matches_torch_layer_and_grow_is_identity():
+    import model
+    torch.manual_seed(0)
+    net = ChessGPT(d=32, layers=2, heads=4).eval()
+    h = torch.randn(3, model.SEQ, 32)
+    assert torch.allclose(net.body(h), model.block(net.body.layers[1], model.block(net.body.layers[0], h)), atol=1e-5)
+    x = torch.from_numpy(np.stack([encode(b) for b in random_boards(4)]))
+    big = model.grow(net, 3, bias=True).eval()
+    assert big.cfg["layers"] == 3 and big.attn_bias.shape == (3, 4, model.SEQ, model.SEQ)
+    for a, b in zip(net(x), big(x)):
+        assert torch.allclose(a, b, atol=1e-5)
+    looped = model.grow(net, 3, loops=2, bias=True)
+    looped.train()
+    sum(t.sum() for t in looped(x)).backward()   # bias and loop offsets get gradients
+    assert looped.attn_bias.grad.abs().sum() > 0 and looped.loop_emb.grad.abs().sum() > 0
+
+
 def test_head_to_head_game_uses_both_players():
     import evaluate
     seen = {"me": 0, "opp": 0}
@@ -95,3 +112,10 @@ def test_chessbench_bag_reader_and_best_move_records(tmp_path):
     assert got == [(f, [], {m: teacher.UNKNOWN}) for f, m in zip(fens, ["e7e5", "g1f3"])]
     assert [data.parse_bc(r)[0] for r in data.bag_records(str(path), 1, 1)] == fens[1:]
     assert np.isnan(teacher.to_grade(teacher.UNKNOWN)) and teacher.to_grade(0) == 0.5
+
+
+def test_opponent_spec_takes_a_mix():
+    import evaluate
+    assert evaluate.spec_of("models/a.pt@2") == ("v2", "models/a.pt", 2.0, False)
+    assert evaluate.spec_of("models/a.pt") == ("v2", "models/a.pt", 0.0, False)
+    assert evaluate.spec_of("v1:models/v1")[:2] == ("v1", "models/v1")

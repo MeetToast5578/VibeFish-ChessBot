@@ -10,7 +10,8 @@ A **small, searchless** chess bot.
   current position (a deeper pass, item 23) is allowed: it never looks at any other position.
 - **Network only:** no opening book and no tablebase probing at play time. Books, tablebases and
   Stockfish may be used to make *training labels*.
-- **Compact:** ≤ 10M parameters and ≤ 20 MB shipped (≤ 5 MB with int8 is the stretch goal).
+- **Compact:** ≤ 14M parameters and ≤ 30 MB shipped (≤ 5 MB with int8 is the stretch goal). The owner
+  raised the cap from 10M for v4 ("bigger but not too big"); older notes below still say 10M.
 
 Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 
@@ -37,6 +38,10 @@ Targets (on our scale: Stockfish 17.1 `UCI_LimitStrength`, 0.1 s/move):
 | round-robin (100 games/pair) | 18% vs v2, 4.5% vs v3 | 82% vs v1, 8% vs v3 | 95.5% vs v1, 92% vs v2 |
 
 Performance rating on our scale: v1 ≈ 975, v2 ≈ 1350–1650, v3 ≈ 1740–1990 (1991 vs SF 2000).
+
+Time-control check: `UCI_Elo` is calibrated at 60s+0.6s, our matches use 0.1 s/move. v3 vs SF 2000
+at **1.0 s/move**, two 60-game runs: +23 =17 −20 (52.5%, perf 2017) and +22 =16 −22 (50.0%), vs 48.7%
+at 0.1 s. No inflation, so the 0.1 s figures stand (`games/v3_vs_sf2000_1s.pgn`, `_run2.pgn`).
 
 ## How we decide (experiment protocol)
 
@@ -166,26 +171,23 @@ instead: 527M positions, each with Stockfish 16's best move (50 ms/move).
       records with an UNKNOWN score: a one-hot policy target, skipped by the value and
       action-value losses. Benchmark puzzle positions and held-out positions
       (`bench/heldout_fens.txt`) are excluded. ~4k positions/s on 4 cores, ~480 B/position.
-- [x] Kaggle CPU notebooks `vibefish-cb-1` / `-2`: positions 0–20M and 20–40M (~1.5 h each).
+- [x] Kaggle CPU notebooks `vibefish-cb-1` / `-2`: positions 0–20M and 20–40M.
 - [x] Equal-GPU-time test, both from v3, 4 h, lr 2e-4, same data otherwise: `vibefish-v31-control`
       (L 25%, L2_00–09 35%, S2_a–h 20%, D3 12%, S/D1/D2 8%) vs `vibefish-v31-cb` (CB1 35%,
-      L 10%, L2_00–09 15%, rest the same). L2 is halved in both so CB fits in the 29 GB of RAM
-      (it did; ~52M positions seen in each run).
-- [x] **Result: neither beats v3, nothing shipped.**
+      L 10%, L2_00–09 15%, rest the same). L2 is halved in both so CB fits in the 29 GB of RAM.
+- [x] Matches vs v3. **Neither ships**; both kept in `models/`:
 
-  | | v3 | control | ChessBench |
-  |---|---|---|---|
-  | head-to-head vs v3 (100 games) | – | 50.5% (+36 =29 −35) | 50.0% (+31 =38 −31) |
-  | SF 2000 (120 games, 0.1 s) | 48.7% | 46.7% | 52.5% (perf 2017) |
-  | puzzles | 59.3% | 58.8% | 59.1% |
-  | held-out wp_lost / top1 | 0.028 / 52.2% | 0.0252 / 52.9% | 0.0243 / 54.3% |
+      | | held-out wp lost / top1 | puzzles | vs v3 (100 g) | SF 2000 (120 g) |
+      |---|---|---|---|---|
+      | v3 | 0.028 / 52.2% | 59.3% | – | 48.7% |
+      | v3.1 control | 0.0252 / 52.9% | 58.8% | 50.5% | 46.7% |
+      | v3.1 ChessBench | 0.0243 / 54.3% | 59.1% | 50.0% | 47.5% |
 
-  ChessBench gave the best held-out accuracy (+2 points top-1) and the best SF score, but the
-  same games vs v3. Lesson: **v3's 6.7M model is saturated**. Four more hours on old or new data
-  move held-out accuracy a little and match results not at all. Next lever is capacity (v4:
-  more layers, looping, attention bias), with ChessBench kept in the mix since it was the better
-  of the two. Also checked: SF's limited strength doesn't depend on our 0.1 s/move (v3 scores
-  50.0% vs SF 2000 at 1 s/move), so the Elo figures stand.
+      A second session ran the same SF 2000 match for v3.1 ChessBench: 52.5% (+50 =26 −44, perf 2017,
+      `games/v31_cb_sf_run2.pgn`). Over 240 games it is 50.0%, even with v3 there too.
+
+      Lesson: at 6.7M params v3 is saturated. More data (even 18M new ChessBench positions)
+      improves held-out accuracy a little but not play. Capacity is the limit, so v4 goes bigger.
 
 Original plan:
 
@@ -229,7 +231,141 @@ Original plan:
 14. **Horizontal-flip augmentation** for positions without castling rights.
 15. **Analyse the draws against the random mover** (stalemate? repetition? 50-move rule?).
 
-### v4: distillation and compactness
+### v4.2: D6 self-play round (not shipped, 2026-11-08)
+
+D6: 4,000 games from v4.1 at depth 12, 320k positions, own moves lose 0.0222 wp (D5: 0.0236).
+Fine-tune `vibefish-v42-ft`: 150 min from v4.1's EMA, lr 5e-5, D6 25% / D5 15% / D4 5% / CB4 15% /
+the rest every-move data; 21.3M positions. `models/vibefish_v42_ft.pt` / `_ema.pt`. EMA, mix 2,
+200 games: **46.0% vs v4.1** (+56 =72 −72), SF 2000 62.0% (2085; v4.1 64.0%), **SF 2400 42.0%**
+(+53 =62 −85, 2344; v4.1 33.0%). Puzzles 64.2%, held-out 0.0228 (v4.1 64.3%, 0.0227).
+Fails the gate (loses head to head), so v4.1 stays. The SF 2400 jump was noise: a second
+200-game run gave v4.2 38.3% and v4.1 39.3%. Over 400 games, v4.2 40.1% vs v4.1 36.1%, ~1σ.
+**Lesson:** the same model moves ~6 points between two 200-game SF runs (Stockfish at 0.1 s is not
+deterministic), so SF differences under ~7 points need 400+ games. A second self-play round on top
+of v4.1 with 40% self-play weight did not help; next try a lower self-play weight or new data types.
+
+### v4.1: one more self-play round (shipped 2026-11-08)
+
+D5: 4,000 games from the v4 main EMA, every move graded at **depth 12** (B1 + B2), 311k positions,
+~2 h per 500 games per CPU notebook. Fine-tune `vibefish-v41-ft`: 150 min from v4's EMA, lr 5e-5,
+D5 25% / D4 10% / CB4 20% / L, L2_1*, S2, D3, S_puz, D1, D2; 18.4M positions. `models/vibefish_v4_1.pt`
+= its EMA. Mix 2, 200 games: **56.8% vs v4** (+80 =67 −53), **SF 2000 64.0%** (2100; v4 56.2%),
+SF 2400 33.0% (= v4). Puzzles 64.3%, held-out 0.0227. 120 games: SF 1600 84.6%, SF 1320 95%,
+random +117 =3 −0. Lesson: self-play with deeper labels still pays; next is D6 from v4.1.
+
+### v4: bigger and deeper (shipped 2026-11-07)
+
+**Shipped:** `models/vibefish_v4.pt` = the fine-tune's EMA (`vibefish-v4-ft`: 3 h from the main
+run's EMA + `opt.pt`, lr 1e-4, CB4 30%, D4 15%, L2_10–19, S2, D3; 22.6M positions, no slowdown),
+played with `--mix 2`. All 200 games: **66.5% vs v3** (+106 =54 −40), **61.5% vs v4-main** at mix 2
+(+86 =74 −40), **SF 2000 56.2%** (+86 =53 −61, perf 2044; v4-main 56.0%), **SF 2400 33.0%**
+(+38 =56 −106, 2277; v4-main 29.0%, 2244). 120 games: SF 1600 79.6% (1836), SF 1320 96.7%, random
++117 =3 −0. Puzzles 63.5% (v4-main 60.2%), held-out 0.0231 / 54.7%. The D4 self-play data shows
+mostly in head-to-head and puzzles; against SF 2000 it is even with v4-main.
+
+v3 grown to **16 layers, d=256, 13.6M params** (owner raised the cap to 14M), initialised from
+v3.1-cb with the new layers as identity. **Free Kaggle tier only** (owner, 2026-11-06): ~18 GPU h
+left this week, 30 h/week after; CPU notebooks are free. No search, one forward pass.
+
+Everything that can make v4 as strong as possible, roughly by expected gain per cost.
+[GPU] = uses GPU quota, [CPU] = free Kaggle CPU notebook or this machine, [code] = change needed.
+
+**A. Already running**
+- [x] Pilots, 110 min each on 2×T4, grown from v3.1-cb, CB2 35% of the mix (`models/vibefish_v4_pilot_{a,b}.pt`,
+      logs in `bench/train_logs/`):
+
+      | | A: 16 layers + bias | B: 16 layers | v3.1-cb (start) | v3 |
+      |---|---|---|---|---|
+      | positions seen (speed) | 13.6M (2,050/s) | 14.9M (2,260/s) | | |
+      | held-out wp_lost / top1 | 0.0248 / 54.0% | 0.0239 / 54.5% | 0.0243 / 54.3% | 0.028 / 52.2% |
+      | puzzles | 60.0% | 59.8% | 59.1% | 59.3% |
+      | vs v3, 100 games | **53.0%** (+40 =26 −34) | 48.5% (+33 =31 −36) | 50% | |
+
+      Both within noise of their start. **Why:** the 8 added layers barely trained. Their
+      out_proj + linear2 weight norms reached ~3 (v3's layers: 66–86), and the bias reached a
+      mean |b| of 0.011. A goes on (bias costs 10% speed, scored best). Fix: item 10.
+
+**B. Data and labels (biggest proven lever: "labels are everything")**
+1. **Self-play round D4 from the pilot winner** (DAgger, every move graded at depth 8, varied
+   starts with `--start-puzzles`). v2 and v3 got their biggest jumps from this. Run on CPU
+   notebooks while the main run trains. [CPU] *Started:* `vibefish-d4-1` / `-2`, 2,000 games
+   each from pilot A, 500-game chunks `D4_10`–`D4_23`, start puzzles from row 4.1M on (dagger
+   used to take the first rows, where the puzzle benchmark comes from; `--start` now sets it).
+   Goes into a fine-tune after the main run.
+   *Done:* 4,000 games, 311k positions, own moves lose 0.0247 wp (D3: 0.027). **D5 started**
+   (`vibefish-d5-1` / `-2`): 4,000 games from the v4 main EMA, graded at **depth 12** (B2 for the
+   positions v4 actually reaches), outputs `D5_10`–`D5_23`.
+2. **Deeper labels where it matters:** regrade at depth 12–16 the positions where the model's
+   move loses > 0.05 win prob (from D4 and held-out-style samples). Depth 8 is our ceiling now. [CPU]
+3. **More fresh ChessBench:** convert positions 40–80M (`cb-3`, `cb-4`) so the main run never
+   repeats data; the v3.1 lesson is that repeats don't help. Best-move-only, so keep it ≤ 35% of the mix. [CPU]
+4. **Endgame tablebases (Syzygy ≤ 5 pieces, ~1 GB):** exact labels for endgame positions from
+   self-play, so won endgames get converted (item 12). [CPU, code]
+5. **Hard-example mining:** oversample positions where the model's move loses the most (item 13). [code]
+6. **Keep ≥ 50% every-move-graded data** (L, L2, S2, D) in the mix: those train the action-value
+   and value heads; ChessBench only trains the policy.
+
+**C. Training recipe**
+7. ~~DDP instead of `nn.DataParallel`~~ dropped: v3 measured 1,900 pos/s on one T4 and 3,580 on
+   two, so DataParallel already scales 1.88×; DDP could add ≤ 6%.
+8. [x] **EMA of weights** (item 9): `train.py --ema 0.999` (default) saves `ema.pt` next to
+   `model.pt` and logs `ema_policy_lost` / `ema_policy_top1`. Ship whichever wins.
+9. [x] **Optimizer state saved** (`opt.pt`) with every checkpoint; continue a run across
+   sessions with `--init model.pt --opt-state opt.pt`.
+10. [x] **Learning rate for grown layers:** the pilots' new layers did not move enough (A above).
+    `train.py --boost-from 8 --boost 5` trains layers 8–15 and the attention bias at 5× lr
+    (1e-3 at lr 2e-4, v3's from-scratch lr). Used for the main run.
+11. [x] **Main run 10–11 h** from the pilot winner, with the cosine schedule over the full run and
+    a lower final lr. Expect ~60M positions; memmap shards are only needed past ~50M in RAM. [GPU 10 h]
+    *Done* (`vibefish-v4-main`, `models/vibefish_v4_main.pt` + `_ema.pt`): from pilot A, boost 5
+    on layers 8–15, CB3 35% of the mix, 63.2M positions. Held-out (train.py) 0.0222 → 0.0211,
+    EMA 0.0209. The new layers' weight norms grew from ~3 to 16–37, bias |b| 0.011 → 0.18.
+    200 games vs v3: model **53.7%** (+73 =69 −58), EMA **55.2%** (+74 =73 −53). Puzzles 59.4% /
+    59.1%, evaluate.py held-out 0.0233 / 0.0232 (v3 59.3%, 0.028).
+    SF 2000, 120 games (EMA): **47.9%** (+42 =31 −47, perf 1986), even with v3's 48.7%. The head-to-head
+    gain doesn't show against Stockfish yet, so the gate isn't met.
+    **Unexplained slowdown:** ~2,330 pos/s until step 60,000 (minute 440), then only 1,738 steps
+    in the last 193 min, with no error in the log. So the lr tail below 5e-5 never ran.
+    The fine-tune logs every 2,000 steps to find where it starts.
+12. **Binned value / action-value heads (HL-Gauss, item 7):** DeepMind's best loss. Try in a
+    second pilot only after the main run, one change at a time. [code, GPU]
+
+**D. Play-time, still no search**
+13. **Tune `--mix`** (policy + action-value blend) on held-out and a 100-game match; v4's
+    action-value head is trained on far more every-move data than v2's was. [CPU]
+    *Held-out / puzzles, v4 main EMA:* mix 0: 0.0232 / 59.1%; 0.5: 0.0234 / 59.4%; 1: 0.0235 / 59.9%;
+    **2: 0.0229 / 60.2%**; 4: 0.0235 / 60.3%; 8: 0.0243 / 59.6%; 16: 0.0247 / 59.1%.
+    *Matches (200 games each; same game numbers get the same 4 random opening plies, so the SF rows share openings):*
+
+    | v4 main EMA | vs v3 | vs SF 2000 (perf) |
+    |---|---|---|
+    | mix 0 | 55.2% (+74 =73 −53) | 52.2% (+85 =39 −76, 2016) |
+    | **mix 2** | **60.5%** (+88 =66 −46) | **56.0%** (+90 =44 −66, 2042) |
+    | v3 (mix 0) | | 47.2% (+72 =45 −83, 1981) |
+
+    Mix 2 vs mix 0 head-to-head: 51.7%. The action-value head helps most against Stockfish.
+    `play.py --mix` added. **Ship with mix 2.** The earlier 120-game 47.9% for mix 0 was noise.
+14. **Mirror averaging** for positions without castling rights (left-right flip, average the
+    two policies): two passes of the same network on the same position, allowed by the rules (item 18). [code]
+
+**E. Measuring properly**
+15. **200-game matches** for v4 vs v3 (100 games has ±5% noise, too much for small gains), plus
+    the usual 120-game SF 1320/1600/2000 matches. Ship only if it clearly beats v3. [CPU]
+16. [x] **Blunder report by game phase** (opening / middlegame / endgame, lost win prob per move from
+    the match PGNs) to aim the next data at the weakest phase. [code, CPU]
+    *Done:* `bench/blunders.py` (depth 12, skips the 4 random opening plies). v4 main EMA vs SF 2000,
+    120 games: opening 12% of the lost win prob (0.0175/move), **middlegame 70%** (0.0289/move,
+    258 moves losing > 0.1, 42 losing > 0.3), endgame 18% (0.0144). v3 vs SF 2000 at 1 s looks
+    the same (12% / 74% / 15%, middlegame 0.0271/move). So the weak spot is middlegame tactics.
+    Tablebases (B4) can wait; deeper labels on middlegame positions (B2, D5 at depth 12) come first.
+17. **DeepMind's 10k test puzzles** for a direct comparison with their 9M / 270M models. [CPU]
+18. **Lichess bot account** (owner creates it) for a human-comparable rating (item 19).
+
+**Suggested order:** pilots → (B1, B3 on CPU in parallel; `vibefish-cb-3` / `-4` = positions 40–80M started) → main run with D4 + CB3 in
+the mix → evaluate (E15–E17) → tune `--mix` and mirror averaging → ship if it beats v3 →
+second-round fine-tune with deeper labels and tablebases if GPU hours remain.
+
+### Later: distillation and compactness
 
 16. **Teacher → student (our own teacher only):** train a bigger VibeFish teacher (e.g. 50–100M)
     on Stockfish labels, have it label positions the small model reaches, and train the small

@@ -18,6 +18,7 @@ Strength must come from data, features, losses and training.
 | `bench/` | benchmark sets (never trained on) + `results.jsonl` of every evaluation |
 | `tests/` | `python -m pytest -q tests` |
 | `HANDOFF.md` | where the work stopped last and what to do next (read first) |
+| `PAPER.md` | technical report of the whole project (v1 → v4.1); update it when a version ships |
 | `PLAN.md` | goals, experiment protocol, data/compute inventory, lessons, roadmap. Keep it updated as steps finish. |
 
 ## Conventions
@@ -40,12 +41,13 @@ Strength must come from data, features, losses and training.
 - Never run Stockfish/data jobs next to a training run: one busy core halves 4-thread PyTorch.
 - Every input feature must be exercised by training data. Lichess/puzzle positions have no move
   history, so history features are only learned from DAgger games (see PLAN.md log).
-- Big files (`data/`, Lichess dumps) are gitignored. Only final weights go in `models/`.
+- Big files (`data/`, Lichess dumps) are gitignored. **Every trained model is kept in `models/`** (owner's rule), shipped or not, named
+  `vibefish_<run>.pt`, so it can be recalled later. GitHub's limit is 100 MB per file.
 - Kaggle (user `yunus0901`): the API token is injected by the session's network proxy, never stored
   locally (`~/.kaggle/access_token` is a placeholder). Kaggle CLI 2.x checks the token by sending it
   in a request body, which the proxy can't fill, so the venv's `kaggle` entry point patches
   `KaggleApi._introspect_token` to skip that check. Never print or commit tokens.
 - Kaggle hides a running kernel's logs and outputs; poll `kaggle kernels status`, then
   `kaggle kernels output`. Sessions stop at 12 h, so keep CPU grading jobs to ≤ 4 h or split them.
-- Shipped model: `models/vibefish_v3.pt` (6.7M params, d=256, 8 layers). Compare new candidates
-  against it with `evaluate.py --vs models/vibefish_v3.pt` and the Stockfish matches.
+- Shipped model: `models/vibefish_v4_1.pt` (v4 fine-tuned on depth-12 self-play; 13.6M params, d=256, 16 layers + attention bias, played with `--mix 2`). Compare new candidates
+  against it with `evaluate.py --mix 2 --vs models/vibefish_v4_1.pt@2` and the Stockfish matches.

@@ -12,7 +12,7 @@ import torch
 from model import load
 
 
-def human(model, human_white):
+def human(pick, human_white):
     board = chess.Board()
     while not board.is_game_over(claim_draw=True):
         print(board.unicode(invert_color=True, borders=True, orientation=human_white), "\n")
@@ -24,14 +24,14 @@ def human(model, human_white):
             except EOFError:
                 return
         else:
-            move = model.pick(board)
+            move = pick(board)
             print("VibeFish plays", board.san(move))
             board.push(move)
     print(board.unicode(invert_color=True, borders=True, orientation=human_white))
     print("result:", board.result(claim_draw=True))
 
 
-def uci(model, name):
+def uci(pick, name):
     board = chess.Board()
     for line in sys.stdin:
         cmd = line.split()
@@ -49,17 +49,19 @@ def uci(model, name):
             for m in rest[1].split() if len(rest) > 1 else []:
                 board.push_uci(m)
         elif cmd[0] == "go":
-            print(f"bestmove {model.pick(board).uci()}", flush=True)
+            print(f"bestmove {pick(board).uci()}", flush=True)
         elif cmd[0] == "quit":
             return
 
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="models/vibefish_v3.pt")
+    p.add_argument("--model", default="models/vibefish_v4_1.pt")
     p.add_argument("--uci", action="store_true")
+    p.add_argument("--mix", type=float, default=2.0, help="weight of the action-value head in the move choice (still one forward pass; v4 and v4.1 are tuned for 2)")
     p.add_argument("--black", action="store_true", help="play black against the bot")
     a = p.parse_args()
     torch.set_num_threads(1)
     net = load(a.model)
-    uci(net, "VibeFish v3") if a.uci else human(net, not a.black)
+    pick = lambda b: net.pick(b, mix=a.mix)
+    uci(pick, "VibeFish v4.1") if a.uci else human(pick, not a.black)

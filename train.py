@@ -4,6 +4,7 @@
   python train.py --mix ... --init runs/main/model.pt --lr 3e-4 --minutes 60 --out runs/ft   # fine-tune
 """
 import argparse
+import copy
 import glob
 import json
 import math
@@ -14,7 +15,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from model import ChessGPT, save, load
+from model import ChessGPT, save, load, grow
 from data import load_shard
 from teacher import to_grade
 
@@ -31,7 +32,14 @@ p.add_argument("--w-value", type=float, default=1.0)
 p.add_argument("--d", type=int, default=128)
 p.add_argument("--layers", type=int, default=4)
 p.add_argument("--heads", type=int, default=4)
+p.add_argument("--loops", type=int, default=1, help="passes through the layer stack (shared weights)")
+p.add_argument("--attn-bias", action="store_true", help="learned square-pair attention bias per layer and head")
 p.add_argument("--init", help="start from this model file")
+p.add_argument("--grow", action="store_true", help="with --init: copy it into a model with --layers/--loops/--attn-bias (d, heads from --init)")
+p.add_argument("--boost-from", type=int, help="layers from this index on (and the attention bias) train at --boost x lr")
+p.add_argument("--boost", type=float, default=1.0, help="lr multiplier for --boost-from, e.g. for layers added by --grow")
+p.add_argument("--ema", type=float, default=0.999, help="decay of the weight average saved as ema.pt (0 = off)")
+p.add_argument("--opt-state", help="with --init: continue this saved optimizer state (opt.pt of the same model)")
 p.add_argument("--eval-every", type=int, default=500)
 p.add_argument("--threads", type=int, default=4)
 p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -121,6 +129,20 @@ def evaluate(model, batch):
     return out
 
 
+def ema_eval(ema, held):
+    if ema is None:
+        return {}
+    r = evaluate(ema, held)
+    return {"ema_policy_lost": r["policy_lost"], "ema_policy_top1": r["policy_top1"]}
+
+
+def checkpoint(model, ema, opt, step):
+    save(model, f"{args.out}/model.pt", step=step)
+    if ema is not None:
+        save(ema, f"{args.out}/ema.pt", step=step)
+    torch.save(opt.state_dict(), f"{args.out}/opt.pt")
+
+
 def main():
     torch.set_num_threads(args.threads)
     torch.manual_seed(0)
@@ -140,9 +162,23 @@ def main():
     scaler = torch.amp.GradScaler("cuda", enabled=dev.type == "cuda" and amp == torch.float16)
     held = [t.to(dev) for t in to_batch([(hx, hi, hs)])]
 
-    model = (load(args.init).train() if args.init else ChessGPT(args.d, args.layers, args.heads)).to(dev)
+    if args.init:
+        model = grow(load(args.init), args.layers, args.loops, args.attn_bias) if args.grow else load(args.init)
+    else:
+        model = ChessGPT(args.d, args.layers, args.heads, args.loops, args.attn_bias)
+    model = model.train().to(dev)
     print(f"params: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M  cfg {model.cfg}", flush=True)
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95))
+    fast_ids = set()
+    if args.boost_from is not None:
+        fast_ids = {id(t) for layer in model.body.layers[args.boost_from:] for t in layer.parameters()}
+        if model.attn_bias is not None:
+            fast_ids.add(id(model.attn_bias))
+    groups = [{"params": [t for t in model.parameters() if id(t) not in fast_ids], "mult": 1.0},
+              {"params": [t for t in model.parameters() if id(t) in fast_ids], "mult": args.boost}]
+    opt = torch.optim.AdamW([g for g in groups if g["params"]], lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95))
+    if args.opt_state:
+        opt.load_state_dict(torch.load(args.opt_state, map_location=dev))
+    ema = copy.deepcopy(model).requires_grad_(False) if args.ema else None
     log = open(f"{args.out}/log.jsonl", "a")
     rec = {"step": 0, "seen": 0, **evaluate(model, held)}
     print(rec, flush=True)
@@ -157,7 +193,7 @@ def main():
     while (frac := (time.time() - t0) / budget) < 1:
         lr = args.lr * min(1, (step + 1) / args.warmup) * (0.05 + 0.95 * 0.5 * (1 + math.cos(math.pi * frac)))
         for gr in opt.param_groups:
-            gr["lr"] = lr
+            gr["lr"] = lr * gr["mult"]
         batch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(sources, counts) if n for p in s.take(n)])]
         with torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda"):   # mixed precision on GPUs only (slower on this CPU)
             pol, act, val, _ = losses(fast, batch)
@@ -168,19 +204,21 @@ def main():
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         scaler.step(opt)
         scaler.update()
+        if ema is not None:
+            torch._foreach_lerp_(list(ema.parameters()), list(model.parameters()), 1 - args.ema)
         step += 1
         seen += len(batch[0])
         run = 0.98 * run + 0.02 * np.array([pol.item(), act.item(), val.item()])
         if step % args.eval_every == 0:
             rec = {"step": step, "seen": seen, "min": round((time.time() - t0) / 60, 1), "lr": round(lr, 6),
-                   "train_pol": round(float(run[0]) / (1 - 0.98 ** step), 4), **evaluate(model, held)}
+                   "train_pol": round(float(run[0]) / (1 - 0.98 ** step), 4), **evaluate(model, held), **ema_eval(ema, held)}
             print(rec, flush=True)
             log.write(json.dumps(rec) + "\n"); log.flush()
-            save(model, f"{args.out}/model.pt", step=step)
-    rec = {"step": step, "seen": seen, "min": round((time.time() - t0) / 60, 1), "final": True, **evaluate(model, held)}
+            checkpoint(model, ema, opt, step)
+    rec = {"step": step, "seen": seen, "min": round((time.time() - t0) / 60, 1), "final": True, **evaluate(model, held), **ema_eval(ema, held)}
     print(rec, flush=True)
     log.write(json.dumps(rec) + "\n")
-    save(model, f"{args.out}/model.pt", step=step)
+    checkpoint(model, ema, opt, step)
 
 
 if __name__ == "__main__":
