@@ -33,10 +33,10 @@ Both heads come out of the same pass. Benchmarks live in `bench/` and are never 
 every move graded by Stockfish at **depth 12** instead of 8, 25% of the mix. It beats v4 56.8% head to head
 (about +47 Elo) and scores 64% against SF 2000 (perf 2,100; v4 56%). Against SF 2400 it ties v4 (33%).
 
-**v1 retrained** (`models/vibefish_v1_retrain_ema.pt`): v1's size (0.89M) with everything learned
+**v1.1** (`models/vibefish_v1_1_ema.pt`): v1's size (0.89M) with everything learned
 since, trained from scratch for 3 h on one T4 (101M positions). Policy only:
 
-| | old v1 | **v1 retrained** | v2 | v3 |
+| | old v1 | **v1.1** | v2 | v3 |
 |---|---|---|---|---|
 | parameters | 0.88M | **0.89M** | 2.9M | 6.7M |
 | positions seen in training | ~0.4M | **101M** | ~2M | ~67M |
@@ -189,7 +189,7 @@ without AMX) and ~34 positions/s/core for Stockfish grading every move at depth 
 | `models/vibefish_v4_1.pt` | **the shipped v4.1 weights** (fp16, 27 MB; copy of `vibefish_v41_ft_ema.pt`) |
 | `models/vibefish_v4.pt` | the v4 weights (fp16, 27 MB; the fine-tune's EMA) |
 | `models/vibefish_v41_ft.pt`, `vibefish_v41_ft_ema.pt` | the v4.1 fine-tune (plain weights / EMA) |
-| `models/vibefish_v1_retrain.pt`, `vibefish_v1_retrain_ema.pt` | v1's size (0.89M) retrained with the current recipe |
+| `models/vibefish_v1_1.pt`, `vibefish_v1_1_ema.pt` | v1's size (0.89M) retrained with the current recipe |
 | `models/vibefish_v3.pt` | the v3 weights (fp16, 13.4 MB) |
 | `models/vibefish_v4_pilot_{a,b}.pt`, `vibefish_v4_main.pt`, `vibefish_v4_main_ema.pt`, `vibefish_v4_ft.pt`, `vibefish_v4_ft_ema.pt` | v4's steps, kept for comparison (`vibefish_v4.pt` is a copy of `_ft_ema`) |
 | `models/vibefish_v2.pt` | the v2 weights (fp16, ~6 MB) |
