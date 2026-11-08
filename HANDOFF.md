@@ -1,4 +1,4 @@
-# Handoff (2026-11-08, ~03:30 UTC)
+# Handoff (2026-11-08, ~02:10 UTC)
 
 State of the work when it was paused, and what to do next. Read `CLAUDE.md` and `PLAN.md` too.
 
@@ -19,7 +19,8 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 
 ## Next steps, in order
 
-1. **Self-play D6 from v4.1** at depth 12 (same command as D5 with `--model` = the
+1. **Self-play D6 from v4.1: started 02:08 UTC** (`vibefish-d6-1` / `-2`, seeds 160000–171500,
+   puzzle rows from 4.8M, chunks `D6_10`–`D6_23`, done ~10:45 UTC). It was set up at depth 12 (same command as D5 with `--model` = the
    `vibefish-v41-ft` output's `runs/v41_ft/ema.pt`, new seeds and puzzle rows, e.g. seeds 150000+,
    `--start` 4,700,000+). Two CPU notebooks, ~8.5 h each. Then a fine-tune like `vibefish-v41-ft`
    (init from its `ema.pt`, D6 25%, D5 15%). Each round has been worth +45–80 Elo head to head.
