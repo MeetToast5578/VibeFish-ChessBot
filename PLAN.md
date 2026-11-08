@@ -228,6 +228,19 @@ Original plan:
 14. **Horizontal-flip augmentation** for positions without castling rights.
 15. **Analyse the draws against the random mover** (stalemate? repetition? 50-move rule?).
 
+### v4.2: D6 self-play round (not shipped, 2026-11-08)
+
+D6: 4,000 games from v4.1 at depth 12, 320k positions, own moves lose 0.0222 wp (D5: 0.0236).
+Fine-tune `vibefish-v42-ft`: 150 min from v4.1's EMA, lr 5e-5, D6 25% / D5 15% / D4 5% / CB4 15% /
+the rest every-move data; 21.3M positions. `models/vibefish_v42_ft.pt` / `_ema.pt`. EMA, mix 2,
+200 games: **46.0% vs v4.1** (+56 =72 −72), SF 2000 62.0% (2085; v4.1 64.0%), **SF 2400 42.0%**
+(+53 =62 −85, 2344; v4.1 33.0%). Puzzles 64.2%, held-out 0.0228 (v4.1 64.3%, 0.0227).
+Fails the gate (loses head to head), so v4.1 stays. The SF 2400 jump (+9 points on the same
+openings, ~2σ) is the open question: confirm with another 200 games at SF 2400 for both before
+reading anything into it. Possible reading: the D6/D5-heavy mix (40% self-play) makes it play
+more like Stockfish wants and less like itself. Next try: less self-play weight, or D6 with fresh
+ChessBench only.
+
 ### v4.1: one more self-play round (shipped 2026-11-08)
 
 D5: 4,000 games from the v4 main EMA, every move graded at **depth 12** (B1 + B2), 311k positions,

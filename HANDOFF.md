@@ -1,4 +1,4 @@
-# Handoff (2026-11-08, ~12:35 UTC)
+# Handoff (2026-11-08, ~15:45 UTC)
 
 State of the work when it was paused, and what to do next. Read `CLAUDE.md` and `PLAN.md` too.
 
@@ -22,7 +22,10 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 0. **D6 done** (2026-11-08): 4,000 games from v4.1, 320k positions at depth 12, own moves lose
    0.0222 wp (D5 from v4-main: 0.0236). **v4.2 fine-tune running:** `vibefish-v42-ft`, launched
    12:31 UTC, 150 min from the `vibefish-v41-ft` output's `ema.pt`, lr 5e-5, D6 25% / D5 15% / D4 5% /
-   CB4 15% / L, L2_1*, S2, D3, S_puz, D1, D2. Gate it like v4.1 (vs `models/vibefish_v4_1.pt@2`, SF 2000/2400).
+   CB4 15% / L, L2_1*, S2, D3, S_puz, D1, D2. **Result: not shipped.** 46.0% vs v4.1 head to head,
+   SF 2000 62.0% (v4.1 64.0%), but SF 2400 42.0% (v4.1 33.0%). Models kept as
+   `models/vibefish_v42_ft.pt` / `_ema.pt`. Next: rerun SF 2400 (200 more games each for v4.1 and
+   v4.2-EMA, different openings via evaluate.py's game numbering) to see if the jump is real.
 1. **Self-play D6 from v4.1: started 02:08 UTC** (`vibefish-d6-1` / `-2`, seeds 160000–171500,
    puzzle rows from 4.8M, chunks `D6_10`–`D6_23`, done ~10:45 UTC). It was set up at depth 12 (same command as D5 with `--model` = the
    `vibefish-v41-ft` output's `runs/v41_ft/ema.pt`, new seeds and puzzle rows, e.g. seeds 150000+,
