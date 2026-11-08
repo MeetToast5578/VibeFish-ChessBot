@@ -180,6 +180,7 @@ without AMX) and ~34 positions/s/core for Stockfish grading every move at depth 
 | `models/v1/` | VibeFish v1: its own `model.py` (different architecture) and weights (3.5 MB) |
 | `bench/` | benchmark sets, `results.jsonl` with every evaluation run, training logs |
 | `games/` | match games vs Stockfish and the v1 / v2 / v3 round-robin |
+| `PAPER.md` | technical report: the whole process from v1 to v4.1, how the bot is built and how it works |
 | `PLAN.md`, `CLAUDE.md` | roadmap / measurements, and notes for agents working on the repo |
 
 ## Credits
