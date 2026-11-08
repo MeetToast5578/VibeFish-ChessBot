@@ -342,7 +342,8 @@ recipe, at a 40% self-play share, did not add strength.
 To separate what came from scale from what came from data and method, we trained a fresh model at
 **v1's size** (d = 128, 4 layers, 4 heads, 0.89M parameters) with the current encoding, heads, labels
 and losses, from random weights. Training: 3 h on one T4 at lr 1e-3 with cosine decay, batch 1,024,
-EMA, ~9,400 positions/s, **101M positions** (over 1,000× v1's), from a mix of ChessBench CB3 (30%),
+EMA, ~9,400 positions/s, **101M positions seen** (~250× v1's ~0.4M samples; drawn from ~41M distinct
+positions, ~510× v1's 80k), from a mix of ChessBench CB3 (30%),
 Lichess evals L/L2 (25%), every-move-graded puzzle positions S2 (20%) and all six self-play sets D1–D6
 (22%), which carry the move history. No attention bias. `models/vibefish_v1_retrain.pt` / `_ema.pt`.
 
