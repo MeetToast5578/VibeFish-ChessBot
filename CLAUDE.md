@@ -18,6 +18,7 @@ Strength must come from data, features, losses and training.
 | `bench/` | benchmark sets (never trained on) + `results.jsonl` of every evaluation |
 | `tests/` | `python -m pytest -q tests` |
 | `HANDOFF.md` | where the work stopped last and what to do next (read first) |
+| `PAPER.md` | technical report of the whole project (v1 → v4.1); update it when a version ships |
 | `PLAN.md` | goals, experiment protocol, data/compute inventory, lessons, roadmap. Keep it updated as steps finish. |
 
 ## Conventions
