@@ -228,6 +228,28 @@ Original plan:
 14. **Horizontal-flip augmentation** for positions without castling rights.
 15. **Analyse the draws against the random mover** (stalemate? repetition? 50-move rule?).
 
+### v4.2: D6 self-play round (not shipped, 2026-11-08)
+
+D6: 4,000 games from v4.1 at depth 12, 320k positions, own moves lose 0.0222 wp (D5: 0.0236).
+Fine-tune `vibefish-v42-ft`: 150 min from v4.1's EMA, lr 5e-5, D6 25% / D5 15% / D4 5% / CB4 15% /
+the rest every-move data; 21.3M positions. `models/vibefish_v42_ft.pt` / `_ema.pt`. EMA, mix 2,
+200 games: **46.0% vs v4.1** (+56 =72 −72), SF 2000 62.0% (2085; v4.1 64.0%), **SF 2400 42.0%**
+(+53 =62 −85, 2344; v4.1 33.0%). Puzzles 64.2%, held-out 0.0228 (v4.1 64.3%, 0.0227).
+Fails the gate (loses head to head), so v4.1 stays. The SF 2400 jump was noise: a second
+200-game run gave v4.2 38.3% and v4.1 39.3%. Over 400 games, v4.2 40.1% vs v4.1 36.1%, ~1σ.
+**Lesson:** the same model moves ~6 points between two 200-game SF runs (Stockfish at 0.1 s is not
+deterministic), so SF differences under ~7 points need 400+ games. A second self-play round on top
+of v4.1 with 40% self-play weight did not help; next try a lower self-play weight or new data types.
+
+### v4.1: one more self-play round (shipped 2026-11-08)
+
+D5: 4,000 games from the v4 main EMA, every move graded at **depth 12** (B1 + B2), 311k positions,
+~2 h per 500 games per CPU notebook. Fine-tune `vibefish-v41-ft`: 150 min from v4's EMA, lr 5e-5,
+D5 25% / D4 10% / CB4 20% / L, L2_1*, S2, D3, S_puz, D1, D2; 18.4M positions. `models/vibefish_v4_1.pt`
+= its EMA. Mix 2, 200 games: **56.8% vs v4** (+80 =67 −53), **SF 2000 64.0%** (2100; v4 56.2%),
+SF 2400 33.0% (= v4). Puzzles 64.3%, held-out 0.0227. 120 games: SF 1600 84.6%, SF 1320 95%,
+random +117 =3 −0. Lesson: self-play with deeper labels still pays; next is D6 from v4.1.
+
 ### v4: bigger and deeper (shipped 2026-11-07)
 
 **Shipped:** `models/vibefish_v4.pt` = the fine-tune's EMA (`vibefish-v4-ft`: 3 h from the main

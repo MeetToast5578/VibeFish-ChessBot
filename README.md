@@ -1,4 +1,4 @@
-# VibeFish v4
+# VibeFish v4.1
 
 A small chess bot with **no search**. A 13.6M-parameter transformer looks at the board once and
 picks a move. No alpha-beta, no MCTS, no lookahead. Every bit of strength is in the network.
@@ -10,23 +10,28 @@ python play.py --uci        # UCI engine for chess GUIs / lichess-bot
 
 ## Results
 
-Every number is **one forward pass per move**. v1–v3 use the policy head only. v4 adds the
+Every number is **one forward pass per move**. v1–v3 use the policy head only. v4 and v4.1 add the
 action-value head's win-probability estimate for each move to the policy (`--mix 2`, the default).
 Both heads come out of the same pass. Benchmarks live in `bench/` and are never trained on.
 
-| | VibeFish v1 | VibeFish v2 | VibeFish v3 | **VibeFish v4** |
-|---|---|---|---|---|
-| parameters | 0.88M | 2.88M (5.8 MB file) | 6.69M (13.4 MB file) | **13.6M (27 MB file)** |
-| puzzles solved (1,050) | 10.5% | 39.1% | 59.3% | **63.5%** |
-| ↳ by rating 400 / 800 / 1200 / 1600 / 2000 / 2400 / 2800+ | 25 / 17 / 17 / 8 / 4 / 2 / 1 % | 95 / 77 / 58 / 28 / 9 / 5 / 3 % | 100 / 96 / 88 / 67 / 41 / 21 / 2 % | **99 / 98 / 93 / 79 / 45 / 27 / 4 %** |
-| held-out: win prob lost per move | 0.086 | 0.054 | 0.028 | **0.023** |
-| held-out: picks Stockfish's best move | 33% | 42% | 52% | **55%** |
-| vs random mover (120 games) | +19 =99 −2 | +106 =14 −0 | +118 =2 −0 | **+117 =3 −0** |
-| vs Stockfish `UCI_Elo` 1320 (120 games) | +3 =23 −94 (12%) | +48 =29 −43 (52%) | +105 =10 −5 (92%) | **+113 =6 −1 (97%)** |
-| vs Stockfish `UCI_Elo` 1600 (120 games) | – | +18 =26 −76 (26%) | +79 =18 −23 (73%) | **+86 =19 −15 (80%)** |
-| vs Stockfish `UCI_Elo` 2000 (200 games) | – | +3 =22 −95 (12%, 120 games) | +72 =45 −83 (47%) | **+86 =53 −61 (56%)** |
-| vs Stockfish `UCI_Elo` 2400 (200 games) | – | – | – | **+38 =56 −106 (33%)** |
-| head-to-head vs v3 (200 games) | | | – | **+106 =54 −40 (66.5%)** |
+| | VibeFish v1 | VibeFish v2 | VibeFish v3 | **VibeFish v4** | **VibeFish v4.1** |
+|---|---|---|---|---|---|
+| parameters | 0.88M | 2.88M (5.8 MB file) | 6.69M (13.4 MB file) | **13.6M (27 MB file)** | **13.6M (27 MB file)** |
+| puzzles solved (1,050) | 10.5% | 39.1% | 59.3% | **63.5%** | **64.3%** |
+| ↳ by rating 400 / 800 / 1200 / 1600 / 2000 / 2400 / 2800+ | 25 / 17 / 17 / 8 / 4 / 2 / 1 % | 95 / 77 / 58 / 28 / 9 / 5 / 3 % | 100 / 96 / 88 / 67 / 41 / 21 / 2 % | **99 / 98 / 93 / 79 / 45 / 27 / 4 %** | **99 / 99 / 94 / 81 / 47 / 27 / 4 %** |
+| held-out: win prob lost per move | 0.086 | 0.054 | 0.028 | **0.023** | **0.023** |
+| held-out: picks Stockfish's best move | 33% | 42% | 52% | **55%** | **55%** |
+| vs random mover (120 games) | +19 =99 −2 | +106 =14 −0 | +118 =2 −0 | **+117 =3 −0** | **+117 =3 −0** |
+| vs Stockfish `UCI_Elo` 1320 (120 games) | +3 =23 −94 (12%) | +48 =29 −43 (52%) | +105 =10 −5 (92%) | **+113 =6 −1 (97%)** | +110 =8 −2 (95%) |
+| vs Stockfish `UCI_Elo` 1600 (120 games) | – | +18 =26 −76 (26%) | +79 =18 −23 (73%) | **+86 =19 −15 (80%)** | **+91 =21 −8 (85%)** |
+| vs Stockfish `UCI_Elo` 2000 (200 games) | – | +3 =22 −95 (12%, 120 games) | +72 =45 −83 (47%) | **+86 =53 −61 (56%)** | **+102 =52 −46 (64%)** |
+| vs Stockfish `UCI_Elo` 2400 (200 games) | – | – | – | **+38 =56 −106 (33%)** | **+38 =56 −106 (33%)** |
+| head-to-head vs v3 (200 games) | | | – | **+106 =54 −40 (66.5%)** | – |
+| head-to-head vs v4 (200 games, both `--mix 2`) | | | | – | **+80 =67 −53 (56.8%)** |
+
+**v4.1** is v4 fine-tuned for 150 min on a new self-play round, D5: 4,000 games by the v4 main-run model,
+every move graded by Stockfish at **depth 12** instead of 8, 25% of the mix. It beats v4 56.8% head to head
+(about +47 Elo) and scores 64% against SF 2000 (perf 2,100; v4 56%). Against SF 2400 it ties v4 (33%).
 
 On Stockfish's limited-strength scale (at 0.1 s per move) v4 performs at **~2,040** against
 SF 2000 and 2,277 against SF 2400. v3 performs at 1,981 against SF 2000, v2 at ~1,350–1,650 and
@@ -165,7 +170,9 @@ without AMX) and ~34 positions/s/core for Stockfish grading every move at depth 
 | `bench/blunders.py` | win probability a model gave away in match games, by game phase |
 | `kaggle_run.py` | runs commands on a Kaggle GPU notebook with datasets attached, downloads the outputs |
 | `play.py` | terminal play and UCI mode |
+| `models/vibefish_v4_1.pt` | **the shipped v4.1 weights** (fp16, 27 MB; copy of `vibefish_v41_ft_ema.pt`) |
 | `models/vibefish_v4.pt` | the v4 weights (fp16, 27 MB; the fine-tune's EMA) |
+| `models/vibefish_v41_ft.pt`, `vibefish_v41_ft_ema.pt` | the v4.1 fine-tune (plain weights / EMA) |
 | `models/vibefish_v3.pt` | the v3 weights (fp16, 13.4 MB) |
 | `models/vibefish_v4_pilot_{a,b}.pt`, `vibefish_v4_main.pt`, `vibefish_v4_main_ema.pt`, `vibefish_v4_ft.pt`, `vibefish_v4_ft_ema.pt` | v4's steps, kept for comparison (`vibefish_v4.pt` is a copy of `_ft_ema`) |
 | `models/vibefish_v2.pt` | the v2 weights (fp16, ~6 MB) |
