@@ -1,7 +1,9 @@
 # VibeFish: notes for agents
 
-Searchless chess bot. A small transformer picks moves with **one forward pass**. Do not add
-search (alpha-beta, MCTS, k-ply lookahead) to the play path. That is the point of the project.
+Searchless chess bot, searchless in DeepMind's sense: the network only ever sees the **current
+position**. One forward pass per move, or one per legal move with that move marked (DeepMind's
+action-value engine; owner-approved 2026-11-09). Do not add search: nothing may play a move forward and
+evaluate the resulting position (no 1-ply lookahead, alpha-beta, MCTS). That is the point of the project.
 Strength must come from data, features, losses and training.
 
 ## Layout
