@@ -259,6 +259,11 @@ us. The "approach DM 9M" long-term goal is still far off: ≥300 Elo, more likel
 v4.1: +0 =26 −174 (6.5%)**, 19 of 26 draws DM ≥3 up (each 100-game half took 6.4–10.8 h on a Kaggle
 CPU notebook). 270M vs v4.1 running: `vibefish-dm270m-a/b` (100 games each, may hit the 12 h cap),
 backups `-c`/`-d` (games 0–49 / 50–99).
+DeepMind's one-pass `9M_behavioral_cloning` checkpoint (the like-for-like comparison) could not be
+used: it was saved from an unpublished Flax model, and their released Haiku code cannot load it. Mapping
+the names gives correct shapes, but the model plays nonsense (2–5 of 60 puzzle first moves, in each of
+4 forward-pass variants), so its architecture differs in an undocumented way. Measure the
+per-legal-move gain directly instead, by building that mode ourselves.
 
 ### v4.2: D6 self-play round (not shipped, 2026-11-08)
 
