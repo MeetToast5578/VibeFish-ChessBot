@@ -15,7 +15,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from model import ChessGPT, save, load, grow
+from model import ChessGPT, save, load, grow, with_cand
 from data import load_shard
 from teacher import to_grade
 
@@ -40,6 +40,12 @@ p.add_argument("--boost-from", type=int, help="layers from this index on (and th
 p.add_argument("--boost", type=float, default=1.0, help="lr multiplier for --boost-from, e.g. for layers added by --grow")
 p.add_argument("--ema", type=float, default=0.999, help="decay of the weight average saved as ema.pt (0 = off)")
 p.add_argument("--opt-state", help="with --init: continue this saved optimizer state (opt.pt of the same model)")
+p.add_argument("--cand", action="store_true", help="train candidate mode (one pass per legal move with it marked)")
+p.add_argument("--cand-pos", type=int, default=256, help="positions per step used for candidate passes")
+p.add_argument("--cand-k", type=int, default=4, help="moves per position: the best plus k-1 random graded ones")
+p.add_argument("--w-cand", type=float, default=1.0, help="weight of the candidate win-prob BCE")
+p.add_argument("--w-rank", type=float, default=1.0, help="weight of the candidate ranking loss (softmax over a position's k moves)")
+p.add_argument("--w-plain", type=float, default=1.0, help="weight of the one-pass losses (policy, action, value); 0 skips that pass")
 p.add_argument("--eval-every", type=int, default=500)
 p.add_argument("--threads", type=int, default=4)
 p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -107,6 +113,46 @@ def losses(model, batch):
     return pol, act, val, (policy, action, value)
 
 
+def cand_losses(model, batch, npos, k):
+    """Candidate mode: for up to npos positions with >= 2 graded moves, the best move plus k-1 random
+    graded ones, each in its own pass. Returns (win-prob BCE, ranking CE over each position's moves)."""
+    x, idx, g = batch
+    known = (idx >= 0) & ~g.isnan()
+    sel = torch.nonzero(known.sum(-1) >= 2).squeeze(1)[:npos]
+    if len(sel) == 0:
+        return torch.zeros((), device=x.device), torch.zeros((), device=x.device)
+    kn = known[sel]
+    r = torch.rand(kn.shape, device=x.device).masked_fill(~kn, -1.0)
+    r[:, 0] = 2.0   # moves are stored best-first: always take the best
+    cols = r.topk(min(k, kn.shape[1]), -1).indices
+    valid = kn.gather(1, cols)
+    mv = idx[sel].gather(1, cols).clamp(min=0)
+    gr = g[sel].gather(1, cols).nan_to_num(0.0)
+    logit = model(x[sel].repeat_interleave(cols.shape[1], 0), mv.flatten()).view(cols.shape).float()
+    bce = F.binary_cross_entropy_with_logits(logit, gr.clamp(0, 1), reduction="none")
+    bce = bce.masked_fill(~valid, 0).sum() / valid.sum().clamp(min=1)
+    target = F.softmax((gr / args.tau).masked_fill(~valid, -1e9), -1)
+    rank = -(target * F.log_softmax(logit.masked_fill(~valid, -1e9), -1)).masked_fill(~valid, 0).sum(-1).mean()
+    return bce, rank
+
+
+@torch.no_grad()
+def cand_eval(model, batch, chunk=4096):
+    """Candidate mode on held-out positions: every legal move scored in its own pass."""
+    x, idx, g = batch
+    mask = idx >= 0
+    rows, cols = torch.nonzero(mask, as_tuple=True)
+    logit = torch.full(idx.shape, -1e9, device=x.device)
+    for a in range(0, len(rows), chunk):
+        r, c = rows[a:a + chunk], cols[a:a + chunk]
+        logit[r, c] = model(x[r], idx[r, c]).float()
+    wp = g.clamp(0, 1)
+    best = wp.masked_fill(~mask, -1).max(-1).values
+    chosen = wp.gather(1, logit.argmax(-1, keepdim=True)).squeeze(1)
+    return {"cand_top1": round((chosen >= best - 1e-9).float().mean().item(), 4),
+            "cand_lost": round((best - chosen).mean().item(), 4)}
+
+
 @torch.no_grad()
 def evaluate(model, batch):
     """Held-out positions have every legal move graded, so idx>=0 is exactly the legal set."""
@@ -125,6 +171,8 @@ def evaluate(model, batch):
         out[f"{name}_top1"] = round((chosen >= best - 1e-9).float().mean().item(), 4)
         out[f"{name}_lost"] = round((best - chosen).mean().item(), 4)
     out["value_mae"] = round((value - best).abs().mean().item(), 4)
+    if model.cfg.get("cand"):
+        out.update(cand_eval(model, batch))
     model.train()
     return out
 
@@ -133,7 +181,7 @@ def ema_eval(ema, held):
     if ema is None:
         return {}
     r = evaluate(ema, held)
-    return {"ema_policy_lost": r["policy_lost"], "ema_policy_top1": r["policy_top1"]}
+    return {f"ema_{k}": r[k] for k in ("policy_lost", "policy_top1", "cand_lost", "cand_top1") if k in r}
 
 
 def checkpoint(model, ema, opt, step):
@@ -166,6 +214,8 @@ def main():
         model = grow(load(args.init), args.layers, args.loops, args.attn_bias) if args.grow else load(args.init)
     else:
         model = ChessGPT(args.d, args.layers, args.heads, args.loops, args.attn_bias)
+    if args.cand:
+        model = with_cand(model)
     model = model.train().to(dev)
     print(f"params: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M  cfg {model.cfg}", flush=True)
     fast_ids = set()
@@ -188,7 +238,8 @@ def main():
     fast = torch.compile(model) if args.compile and not args.multi_gpu else model
     if args.multi_gpu and torch.cuda.device_count() > 1:
         fast = torch.nn.DataParallel(fast)
-    t0, step, seen, run = time.time(), 0, 0, np.zeros(3)
+    t0, step, seen, run = time.time(), 0, 0, np.zeros(5)
+    zero = torch.zeros((), device=dev)
     budget = args.minutes * 60
     while (frac := (time.time() - t0) / budget) < 1:
         lr = args.lr * min(1, (step + 1) / args.warmup) * (0.05 + 0.95 * 0.5 * (1 + math.cos(math.pi * frac)))
@@ -196,8 +247,9 @@ def main():
             gr["lr"] = lr * gr["mult"]
         batch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(sources, counts) if n for p in s.take(n)])]
         with torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda"):   # mixed precision on GPUs only (slower on this CPU)
-            pol, act, val, _ = losses(fast, batch)
-        loss = pol + args.w_action * act + args.w_value * val
+            pol, act, val, _ = losses(fast, batch) if args.w_plain else (zero, zero, zero, None)
+            cb, rk = cand_losses(fast, batch, args.cand_pos, args.cand_k) if args.cand else (zero, zero)
+        loss = args.w_plain * (pol + args.w_action * act + args.w_value * val) + args.w_cand * cb + args.w_rank * rk
         opt.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.unscale_(opt)
@@ -208,10 +260,12 @@ def main():
             torch._foreach_lerp_(list(ema.parameters()), list(model.parameters()), 1 - args.ema)
         step += 1
         seen += len(batch[0])
-        run = 0.98 * run + 0.02 * np.array([pol.item(), act.item(), val.item()])
+        run = 0.98 * run + 0.02 * np.array([pol.item(), act.item(), val.item(), cb.item(), rk.item()])
         if step % args.eval_every == 0:
+            tr = run / (1 - 0.98 ** step)
             rec = {"step": step, "seen": seen, "min": round((time.time() - t0) / 60, 1), "lr": round(lr, 6),
-                   "train_pol": round(float(run[0]) / (1 - 0.98 ** step), 4), **evaluate(model, held), **ema_eval(ema, held)}
+                   "train_pol": round(float(tr[0]), 4), **({"train_cand": round(float(tr[3]), 4), "train_rank": round(float(tr[4]), 4)} if args.cand else {}),
+                   **evaluate(model, held), **ema_eval(ema, held)}
             print(rec, flush=True)
             log.write(json.dumps(rec) + "\n"); log.flush()
             checkpoint(model, ema, opt, step)

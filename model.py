@@ -96,9 +96,9 @@ def block(layer: nn.TransformerEncoderLayer, h, bias=None):
 
 
 class ChessGPT(nn.Module):
-    def __init__(self, d=128, layers=4, heads=4, loops=1, bias=False):
+    def __init__(self, d=128, layers=4, heads=4, loops=1, bias=False, cand=False):
         super().__init__()
-        self.cfg = dict(d=d, layers=layers, heads=heads, loops=loops, bias=bias)
+        self.cfg = dict(d=d, layers=layers, heads=heads, loops=loops, bias=bias, cand=cand)
         self.sq_emb = nn.ModuleList(nn.Embedding(n, d) for n in SQ_FEATS)
         self.gl_emb = nn.ModuleList(nn.Embedding(n, d) for n in GLOBAL_FEATS)
         self.pos = nn.Parameter(torch.randn(SEQ, d) * 0.02)
@@ -113,12 +113,19 @@ class ChessGPT(nn.Module):
         self.pq, self.pk = nn.Linear(d, d), nn.Linear(d, d)   # policy: from-square . to-square
         self.aq, self.ak = nn.Linear(d, d), nn.Linear(d, d)   # action value: same shape, sigmoid -> win prob
         self.value = nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, 1))
+        if cand:
+            # candidate mode (one pass per legal move): mark the move's from/to squares (0 none, 1 from,
+            # 2 to; zero-init so a model it is added to starts unchanged) and read its win prob
+            self.cand_emb = nn.Embedding(3, d)
+            nn.init.zeros_(self.cand_emb.weight)
+            self.cand_head = nn.Sequential(nn.Linear(3 * d, d), nn.GELU(), nn.Linear(d, 1))
         self.d = d
 
-    def forward(self, x):
-        """x: [B, SEQ, NF] ints -> policy logits [B, 4096], action-value logits [B, 4096], value [B]."""
+    def trunk(self, x, marks=None):
         x = x.long()
         sq = sum(e(x[:, :64, i]) for i, e in enumerate(self.sq_emb))
+        if marks is not None:
+            sq = sq + self.cand_emb(marks)
         gl = torch.stack([e(x[:, 64 + j, 0]) for j, e in enumerate(self.gl_emb)], 1)
         h = torch.cat([sq, gl], 1) + self.pos
         for p in range(self.cfg["loops"]):
@@ -126,7 +133,20 @@ class ChessGPT(nn.Module):
                 h = h + self.loop_emb[p]
             for i, layer in enumerate(self.body.layers):
                 h = block(layer, h, None if self.attn_bias is None else self.attn_bias[i])
-        h = self.norm(h)
+        return self.norm(h)
+
+    def forward(self, x, mv=None):
+        """x: [B, SEQ, NF] ints -> policy logits [B, 4096], action-value logits [B, 4096], value [B].
+        With mv ([B] oriented move indices, candidate mode): win-prob logit [B] of playing that move."""
+        if mv is not None:
+            mv = mv.long()
+            f, t = mv // 64, mv % 64
+            rows = torch.arange(len(mv), device=mv.device)
+            marks = torch.zeros(len(mv), 64, dtype=torch.long, device=mv.device)
+            marks[rows, f], marks[rows, t] = 1, 2
+            h = self.trunk(x, marks)
+            return self.cand_head(torch.cat([h.mean(1), h[rows, f], h[rows, t]], -1)).squeeze(-1)
+        h = self.trunk(x)
         s = h[:, :64]
         scale = 1 / math.sqrt(self.d)
         policy = (self.pq(s) @ self.pk(s).transpose(1, 2) * scale).flatten(1)
@@ -135,18 +155,22 @@ class ChessGPT(nn.Module):
         return policy, action, value
 
     @torch.no_grad()
-    def scores(self, board: chess.Board, mix=0.0):
-        """(legal move indices, score per legal move). mix blends in the action-value head."""
-        policy, action, _ = self(torch.from_numpy(encode(board))[None])
+    def scores(self, board: chess.Board, mix=0.0, cand=False):
+        """(legal move indices, score per legal move). mix blends in the action-value head. cand: one
+        pass per legal move (that move marked), score = its win-prob logit (DeepMind-style, no lookahead)."""
         legal = legal_indices(board)
+        if cand:
+            x = torch.from_numpy(encode(board))[None].expand(len(legal), -1, -1)
+            return legal, self(x, torch.tensor(legal))
+        policy, action, _ = self(torch.from_numpy(encode(board))[None])
         s = F.log_softmax(policy[0, legal], -1)
         if mix:
             s = s + mix * F.logsigmoid(action[0, legal])
         return legal, s
 
     @torch.no_grad()
-    def pick(self, board: chess.Board, temperature=0.0, mix=0.0) -> chess.Move:
-        legal, s = self.scores(board, mix)
+    def pick(self, board: chess.Board, temperature=0.0, mix=0.0, cand=False) -> chess.Move:
+        legal, s = self.scores(board, mix, cand)
         if temperature <= 0:
             i = legal[int(s.argmax())]
         else:
@@ -162,13 +186,23 @@ def save(model: ChessGPT, path: str, **extra):
 def grow(src: ChessGPT, layers, loops=1, bias=False) -> ChessGPT:
     """Depth up-scaling: src's weights in a deeper model. Added layers start as identity
     (out_proj and linear2 zeroed, pre-norm), bias and loop offsets start at zero."""
-    m = ChessGPT(src.cfg["d"], layers, src.cfg["heads"], loops, bias)
+    m = ChessGPT(src.cfg["d"], layers, src.cfg["heads"], loops, bias, src.cfg.get("cand", False))
     missing, unexpected = m.load_state_dict(src.state_dict(), strict=False)
     assert not unexpected, unexpected
     for layer in m.body.layers[src.cfg["layers"]:]:
         for lin in (layer.self_attn.out_proj, layer.linear2):
             nn.init.zeros_(lin.weight)
             nn.init.zeros_(lin.bias)
+    return m
+
+
+def with_cand(src: ChessGPT) -> ChessGPT:
+    """src plus the candidate-mode parts (mark embedding at zero, fresh head); everything else kept."""
+    if src.cfg.get("cand"):
+        return src
+    m = ChessGPT(**{**src.cfg, "cand": True})
+    missing, unexpected = m.load_state_dict(src.state_dict(), strict=False)
+    assert not unexpected and all(k.startswith("cand_") for k in missing), (missing, unexpected)
     return m
 
 
