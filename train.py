@@ -46,6 +46,7 @@ p.add_argument("--cand-k", type=int, default=4, help="moves per position: the be
 p.add_argument("--w-cand", type=float, default=1.0, help="weight of the candidate win-prob BCE")
 p.add_argument("--w-rank", type=float, default=1.0, help="weight of the candidate ranking loss (softmax over a position's k moves)")
 p.add_argument("--w-plain", type=float, default=1.0, help="weight of the one-pass losses (policy, action, value); 0 skips that pass")
+p.add_argument("--cand-lr-mult", type=float, default=10.0, help="lr multiplier for the new candidate parts (mark embedding, head)")
 p.add_argument("--eval-every", type=int, default=500)
 p.add_argument("--threads", type=int, default=4)
 p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -118,7 +119,8 @@ def cand_losses(model, batch, npos, k):
     graded ones, each in its own pass. Returns (win-prob BCE, ranking CE over each position's moves)."""
     x, idx, g = batch
     known = (idx >= 0) & ~g.isnan()
-    sel = torch.nonzero(known.sum(-1) >= 2).squeeze(1)[:npos]
+    sel = torch.nonzero(known.sum(-1) >= 2).squeeze(1)
+    sel = sel[torch.randperm(len(sel), device=sel.device)[:npos]]   # rows come grouped by source: sample across all
     if len(sel) == 0:
         return torch.zeros((), device=x.device), torch.zeros((), device=x.device)
     kn = known[sel]
@@ -223,8 +225,10 @@ def main():
         fast_ids = {id(t) for layer in model.body.layers[args.boost_from:] for t in layer.parameters()}
         if model.attn_bias is not None:
             fast_ids.add(id(model.attn_bias))
-    groups = [{"params": [t for t in model.parameters() if id(t) not in fast_ids], "mult": 1.0},
-              {"params": [t for t in model.parameters() if id(t) in fast_ids], "mult": args.boost}]
+    cand_ids = {id(t) for n, t in model.named_parameters() if n.startswith("cand_")} if args.cand else set()
+    groups = [{"params": [t for t in model.parameters() if id(t) not in fast_ids | cand_ids], "mult": 1.0},
+              {"params": [t for t in model.parameters() if id(t) in fast_ids], "mult": args.boost},
+              {"params": [t for t in model.parameters() if id(t) in cand_ids], "mult": args.cand_lr_mult}]
     opt = torch.optim.AdamW([g for g in groups if g["params"]], lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95))
     if args.opt_state:
         opt.load_state_dict(torch.load(args.opt_state, map_location=dev))
