@@ -20,7 +20,9 @@ from data import load_shard
 from teacher import to_grade
 
 p = argparse.ArgumentParser()
-p.add_argument("--mix", required=True, help="comma list of glob:weight[:kmax], kmax = max moves kept per position")
+p.add_argument("--mix", required=True, help="comma list of glob:weight[:kmax[:cand]], kmax = max moves kept per position; "
+               "a trailing :cand marks a candidate-only source (ChessBench action-value rows: one graded move per position)")
+p.add_argument("--cand-batch", type=int, default=512, help="rows per step drawn from the :cand sources")
 p.add_argument("--heldout", default="data/heldout.npz")
 p.add_argument("--minutes", type=float, default=60)
 p.add_argument("--batch", type=int, default=512)
@@ -114,12 +116,13 @@ def losses(model, batch):
     return pol, act, val, (policy, action, value)
 
 
-def cand_losses(model, batch, npos, k):
-    """Candidate mode: for up to npos positions with >= 2 graded moves, the best move plus k-1 random
-    graded ones, each in its own pass. Returns (win-prob BCE, ranking CE over each position's moves)."""
+def cand_losses(model, batch, npos, k, min_known=2):
+    """Candidate mode: for up to npos positions with >= min_known graded moves, the best move plus k-1
+    random graded ones, each in its own pass. Returns (win-prob BCE, ranking CE over each position's
+    moves; zero for positions with one move, e.g. ChessBench action-value rows)."""
     x, idx, g = batch
     known = (idx >= 0) & ~g.isnan()
-    sel = torch.nonzero(known.sum(-1) >= 2).squeeze(1)
+    sel = torch.nonzero(known.sum(-1) >= min_known).squeeze(1)
     sel = sel[torch.randperm(len(sel), device=sel.device)[:npos]]   # rows come grouped by source: sample across all
     if len(sel) == 0:
         return torch.zeros((), device=x.device), torch.zeros((), device=x.device)
@@ -198,13 +201,15 @@ def main():
     torch.manual_seed(0)
     rng = np.random.default_rng(0)
     os.makedirs(args.out, exist_ok=True)
-    sources = []
+    sources, cand_sources = [], []
     for item in args.mix.split(","):
-        pattern, w, *kmax = item.split(":")
-        sources.append(Source(pattern, float(w), rng, int(kmax[0]) if kmax else None))
-        print(f"{pattern}: {sources[-1].n} positions, weight {w}", flush=True)
-    total_w = sum(s.weight for s in sources)
-    counts = [round(args.batch * s.weight / total_w) for s in sources]
+        pattern, w, *rest = item.split(":")
+        src = Source(pattern, float(w), rng, int(rest[0]) if rest and rest[0] else None)
+        (cand_sources if rest[1:] == ["cand"] else sources).append(src)
+        print(f"{pattern}: {src.n} positions, weight {w}{' (candidate only)' if rest[1:] == ['cand'] else ''}", flush=True)
+    assert args.cand or not cand_sources, ":cand sources need --cand"
+    split = lambda ss, n: [round(n * s.weight / sum(t.weight for t in ss)) for s in ss]
+    counts, cand_counts = split(sources, args.batch), split(cand_sources, args.cand_batch)
     hx, hi, hs = load_shard(args.heldout)
     dev = torch.device(args.device)
     # bf16 only with hardware support (Ampere+); T4 reports bf16 "supported" but emulates it ~10x slower
@@ -242,7 +247,7 @@ def main():
     fast = torch.compile(model) if args.compile and not args.multi_gpu else model
     if args.multi_gpu and torch.cuda.device_count() > 1:
         fast = torch.nn.DataParallel(fast)
-    t0, step, seen, run = time.time(), 0, 0, np.zeros(5)
+    t0, step, seen, run = time.time(), 0, 0, np.zeros(6)
     zero = torch.zeros((), device=dev)
     budget = args.minutes * 60
     while (frac := (time.time() - t0) / budget) < 1:
@@ -253,7 +258,13 @@ def main():
         with torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda"):   # mixed precision on GPUs only (slower on this CPU)
             pol, act, val, _ = losses(fast, batch) if args.w_plain else (zero, zero, zero, None)
             cb, rk = cand_losses(fast, batch, args.cand_pos, args.cand_k) if args.cand else (zero, zero)
-        loss = args.w_plain * (pol + args.w_action * act + args.w_value * val) + args.w_cand * cb + args.w_rank * rk
+            if cand_sources:   # one graded move per row: candidate BCE only
+                cbatch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(cand_sources, cand_counts) if n for p in s.take(n)])]
+                av, _ = cand_losses(fast, cbatch, args.cand_batch, 1, min_known=1)
+            else:
+                av = zero
+        loss = (args.w_plain * (pol + args.w_action * act + args.w_value * val) + args.w_cand * cb + args.w_rank * rk
+                + args.w_cand * av)
         opt.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.unscale_(opt)
@@ -264,11 +275,12 @@ def main():
             torch._foreach_lerp_(list(ema.parameters()), list(model.parameters()), 1 - args.ema)
         step += 1
         seen += len(batch[0])
-        run = 0.98 * run + 0.02 * np.array([pol.item(), act.item(), val.item(), cb.item(), rk.item()])
+        run = 0.98 * run + 0.02 * np.array([pol.item(), act.item(), val.item(), cb.item(), rk.item(), av.item()])
         if step % args.eval_every == 0:
             tr = run / (1 - 0.98 ** step)
             rec = {"step": step, "seen": seen, "min": round((time.time() - t0) / 60, 1), "lr": round(lr, 6),
                    "train_pol": round(float(tr[0]), 4), **({"train_cand": round(float(tr[3]), 4), "train_rank": round(float(tr[4]), 4)} if args.cand else {}),
+                   **({"train_av": round(float(tr[5]), 4)} if cand_sources else {}),
                    **evaluate(model, held), **ema_eval(ema, held)}
             print(rec, flush=True)
             log.write(json.dumps(rec) + "\n"); log.flush()

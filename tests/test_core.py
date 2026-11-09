@@ -153,3 +153,12 @@ def test_candidate_marks_change_the_output():
 def test_opponent_spec_takes_cand():
     import evaluate
     assert evaluate.spec_of("models/a.pt@cand") == ("v2", "models/a.pt", "cand", False)
+
+
+def test_chessbench_action_value_record_parses_to_our_score():
+    import struct
+    fen, mv, wp = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1", "e7e5", 0.4
+    rec = bytes([len(fen)]) + fen.encode() + bytes([len(mv)]) + mv.encode() + struct.pack(">d", wp)
+    f, moves, scores = data.parse_av(rec)
+    assert f == fen and moves == [] and list(scores) == [mv]
+    assert abs(float(teacher.to_grade(scores[mv])) - wp) < 1e-3   # same win-prob curve both ways
