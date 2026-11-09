@@ -56,6 +56,12 @@ levels understate it. v4.1 is ~2,100 there. At a fixed 3 GPU-hours, 3.3× the pa
 ~20–50 Elo (52.5% head to head), because the bigger model saw 0.41× the positions. Details:
 `PAPER.md` §4.8–4.9.
 
+**Against DeepMind's searchless models** (their checkpoints and code, used only as opponents,
+`--vs "uci:sh bench/dm.sh 9M"`): their **9M beats every VibeFish model**, 200 games each: v4.1 14.2%
+(+1 =55 −144), v1.1 13.0%, v2.1 12.2%, v3 9.5%. Most draws are positions DeepMind was winning but
+repeated instead of converting, so the true gap is larger than ~310 Elo. Their engine runs one pass per
+legal move (~30 per position), ours one per position. Details: `PAPER.md` §4.10.
+
 On Stockfish's limited-strength scale (at 0.1 s per move) v4 performs at **~2,040** against
 SF 2000 and 2,277 against SF 2400. v3 performs at 1,981 against SF 2000, v2 at ~1,350–1,650 and
 v1 at ~975. Against weak opponents the perf numbers say little (v4 has 1 loss in 120 games

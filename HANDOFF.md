@@ -33,7 +33,8 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   **v4.1 vs DM 9M: +1 =55 −144 (14.2%), ~−310 Elo.** All losses are mates (median 88 plies), all
   draws repetitions. v4.1 vs 136M / 270M run on Kaggle CPU notebooks `vibefish-dm136m-a/b`,
   `vibefish-dm270m-a/b` (100 games each half, `--first-game 0/100`; outputs `results.jsonl` + PGN).
-  v2.1, v3 and v1.1 vs 9M run locally (queue in the session scratchpad; results go to bench/results.jsonl).
+  vs 9M, 200 games: v1.1 13.0%, v2.1 12.2%, v3 9.5%. Most draws (34–42 per model) are DeepMind
+  ≥3 points up and repeating instead of converting, so the real gap is bigger. PAPER.md §4.10.
 
 ## Next steps, in order
 

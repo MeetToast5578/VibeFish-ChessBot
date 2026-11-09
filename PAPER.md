@@ -391,6 +391,29 @@ gap is within one or two match-noise bands (~±6 points between repeated 200-gam
 tactics are unchanged (puzzles). Both runs were still improving when the clock stopped, so 3 GPU-hours
 saturates neither; where extra size starts to pay off needs longer runs at each size.
 
+### 4.10 Against DeepMind's searchless models
+
+DeepMind's published checkpoints (*Grandmaster-level chess without search*) were played as opponents
+through their own code (`bench/dm_uci.py`, JAX on CPU). Their engine runs one forward pass for **each
+legal move** (action value, ~30 passes per position) and plays the highest predicted win probability;
+ours runs one pass per position. Neither looks past the current position. Same 4-ply random openings,
+both colours, 200 games each. PGNs: `games/*_vs_dm9m.pgn`.
+
+| vs DeepMind 9M | params | W / D / L | score | draws where DM was ≥3 points of material up |
+|---|---|---|---|---|
+| v4.1 (mix 2) | 13.6M | 1 / 55 / 144 | **14.2%** | 41 of 55 |
+| v2.1 | 2.9M | 0 / 49 / 151 | 12.2% | 42 of 48 |
+| v1.1 | 0.89M | 0 / 52 / 148 | 13.0% | 41 of 52 |
+| v3 | 6.7M | 0 / 38 / 162 | 9.5% | 34 of 38 |
+
+**DeepMind's 9M is far stronger than any VibeFish model** (14.2% ≈ −310 Elo, and that flatters us).
+Every loss is a checkmate (median 88 plies). Most draws are repetitions in positions DeepMind was
+winning: when many moves score near 100%, its argmax shuffles instead of converting, a weakness of the
+plain action-value engine. Counting only draws from level positions, VibeFish's real score is ~2–4%.
+The four VibeFish models are nearly indistinguishable against it; v4.1 holds the most level draws
+(12, vs 4–9). Likely reasons for the gap: ~15B action-value labels vs our few hundred million
+positions, and 30× more network compute per move.
+
 ## 5. Results summary
 
 All numbers are one forward pass per move. v4 and v4.1 use `mix = 2`.

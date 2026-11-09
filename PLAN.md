@@ -249,6 +249,14 @@ SF 2000 35.0% (1892; mix 2: 38.3%, 1917). Lesson: data and method, not size, mad
 positions gives ~+20–50 Elo, inside two match-noise bands. Both runs were still improving at the
 end, so at this budget neither size is saturated; the size sweep needs longer runs to find the knee.
 
+### DeepMind's searchless models as opponents (2026-11-09)
+
+`bench/dm_uci.py` runs their checkpoints through their own code. 200 games each vs **DM 9M**: v4.1
+14.2% (+1 =55 −144), v1.1 13.0%, v2.1 12.2%, v3 9.5%. 34–42 of each model's draws are DeepMind ≥3
+points of material up and repeating (its argmax can't convert won positions), so these scores flatter
+us. The "approach DM 9M" long-term goal is still far off: ≥300 Elo, more likely ~500. 136M / 270M
+vs v4.1 running on Kaggle CPU notebooks `vibefish-dm{136m,270m}-{a,b}`.
+
 ### v4.2: D6 self-play round (not shipped, 2026-11-08)
 
 D6: 4,000 games from v4.1 at depth 12, 320k positions, own moves lose 0.0222 wp (D5: 0.0236).
