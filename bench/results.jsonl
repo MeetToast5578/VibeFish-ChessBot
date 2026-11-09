@@ -78,3 +78,4 @@
 {"model": "models/vibefish_v2_1_ema.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 9M", "movetime": 0.1, "W": 0, "D": 49, "L": 151, "score": 0.122}]}
 {"model": "models/vibefish_v3.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 9M", "movetime": 0.1, "W": 0, "D": 38, "L": 162, "score": 0.095}]}
 {"model": "models/vibefish_v1_1_ema.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 9M", "movetime": 0.1, "W": 0, "D": 52, "L": 148, "score": 0.13}]}
+{"model": "/kaggle/input/notebooks/yunus0901/vibefish-v41-ft/runs/v41_ft/ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 136M", "movetime": 0.1, "W": 0, "D": 18, "L": 82, "score": 0.09}]}
