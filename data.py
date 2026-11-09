@@ -103,7 +103,7 @@ def to_shard(encoded, path):
     for r, (_, top) in enumerate(encoded):
         idx[r, :len(top)] = [i for i, _ in top]
         score[r, :len(top)] = [s for _, s in top]
-    np.savez(path, x=x, idx=idx, score=score)
+    np.savez_compressed(path, x=x, idx=idx, score=score)
     print(f"wrote {path}: {len(x)} positions, k={k}", flush=True)
 
 
