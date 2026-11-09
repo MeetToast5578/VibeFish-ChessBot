@@ -33,25 +33,28 @@ Both heads come out of the same pass. Benchmarks live in `bench/` and are never 
 every move graded by Stockfish at **depth 12** instead of 8, 25% of the mix. It beats v4 56.8% head to head
 (about +47 Elo) and scores 64% against SF 2000 (perf 2,100; v4 56%). Against SF 2400 it ties v4 (33%).
 
-**v1.1** (`models/vibefish_v1_1_ema.pt`): v1's size (0.89M) with everything learned
-since, trained from scratch for 3 h on one T4 (101M positions). Policy only:
+**v1.1 and v2.1** (`models/vibefish_v1_1_ema.pt`, `models/vibefish_v2_1_ema.pt`): v1's and v2's sizes
+with everything learned since, each trained from scratch for the same 3 h on one T4 with the same data
+mix. Policy only:
 
-| | old v1 | **v1.1** | v2 | v3 |
-|---|---|---|---|---|
-| parameters | 0.88M | **0.89M** | 2.9M | 6.7M |
-| positions seen in training | ~0.4M | **101M** | ~2M | ~67M |
-| compute | 2 CPU cores, 1 h | **1×T4, 3 h** | 4 CPU cores, ~4.5 h | 2×T4, 5 h |
-| puzzles solved | 10.5% | **58.4%** | 39.1% | 59.3% |
-| held-out wp lost / top1 | 0.086 / 33% | **0.031 / 50.5%** | 0.054 / 42% | 0.028 / 52% |
-| vs random (120) | +19 =99 −2 | **+113 =7 −0** | +106 =14 −0 | +118 =2 −0 |
-| vs SF 1320 / 1600 / 2000 (120) | 12% / – / – | **87.5% / 67.9% / 35.0%** | 52% / 26% / 12% | 92% / 73% / 49% |
-| perf Elo vs SF 1320 / 1600 / 2000 | – | **1,658 / 1,730 / 1,892** (SF 2000 with `--mix 2`: 38.3%, 1,917) | – | – / – / 1,981 |
-| head-to-head, 200 games | | **93.0% vs old v1, 89.0% vs v2, 38.5% vs v3** | | |
+| | old v1 | **v1.1** | old v2 | **v2.1** | v3 |
+|---|---|---|---|---|---|
+| parameters | 0.88M | **0.89M** | 2.9M | **2.9M** | 6.7M |
+| positions seen in training | ~0.4M | **101M** | ~2M | **42M** | ~67M |
+| compute | 2 CPU cores, 1 h | **1×T4, 3 h** | 4 CPU cores, ~4.5 h | **1×T4, 3 h** | 2×T4, 5 h |
+| puzzles solved | 10.5% | **58.4%** | 39.1% | **57.9%** | 59.3% |
+| held-out wp lost / top1 | 0.086 / 33% | **0.031 / 50.5%** | 0.054 / 42% | **0.028 / 52.1%** | 0.028 / 52% |
+| vs random (120) | +19 =99 −2 | **+113 =7 −0** | +106 =14 −0 | **+117 =3 −0** | +118 =2 −0 |
+| vs SF 1320 / 1600 / 2000 (120) | 12% / – / – | **87.5% / 67.9% / 35.0%** | 52% / 26% / 12% | **91.7% / 70.4% / 42.1%** | 92% / 73% / 49% |
+| perf Elo vs SF 1320 / 1600 / 2000 | ~975 / – / – | **1,658 / 1,730 / 1,892** | – | **1,737 / 1,751 / 1,945** | – / – / 1,981 |
+| head-to-head, 200 games | | **93.0% vs old v1, 89.0% vs old v2, 38.5% vs v3** | | **52.5% vs v1.1, 89.2% vs old v2, 43.2% vs v3** | |
 
-The same tiny network goes from drawing a random mover to beating v2 89%. **v1.1 plays at about
-1,900** on Stockfish's `UCI_Elo` scale (0.1 s per move). The SF 2000 match is the one to trust, since
-its score is closest to 50%; the lopsided wins against weaker levels understate it. v4.1 is ~2,100
-there, at 15× the parameters. Details: `PAPER.md` §4.8.
+The same tiny network goes from drawing a random mover to beating the old v2 89%. **v1.1 plays at
+about 1,900 and v2.1 at about 1,950** on Stockfish's `UCI_Elo` scale (0.1 s per move). The SF 2000
+match is the one to trust, since its score is closest to 50%; the lopsided wins against weaker
+levels understate it. v4.1 is ~2,100 there. At a fixed 3 GPU-hours, 3.3× the parameters bought only
+~20–50 Elo (52.5% head to head), because the bigger model saw 0.41× the positions. Details:
+`PAPER.md` §4.8–4.9.
 
 On Stockfish's limited-strength scale (at 0.1 s per move) v4 performs at **~2,040** against
 SF 2000 and 2,277 against SF 2400. v3 performs at 1,981 against SF 2000, v2 at ~1,350–1,650 and

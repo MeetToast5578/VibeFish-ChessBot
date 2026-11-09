@@ -22,9 +22,18 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   SF 2000 35%. Not a ship candidate (v4.1 is far stronger); it is the "same size, better method" study
   in PAPER.md §4.8. Its loss was still falling: a longer run or a self-play round would add more.
 
-- **v2.1 training** (`vibefish-v2-1`, launched 2026-11-08 21:07 UTC): v2's size (d=192, 6 layers, 6 heads,
-  2.9M) with exactly v1.1's recipe (same mix, 180 min on one T4, lr 1e-3, EMA, from scratch). Equal GPU time,
-  so v1.1 vs v2.1 is the first VibeFish X data point (size at a fixed compute budget).
+- **v2.1** (2026-11-09, `models/vibefish_v2_1_ema.pt`): v2's size (2.9M) with exactly v1.1's recipe and
+  3 h budget; 41.9M positions (~3,900 pos/s). Puzzles 57.9%, held-out 0.028, **52.5% vs v1.1**, 89.2% vs
+  old v2, 43.2% vs v3, SF 2000 42.1% (perf 1,945). First VibeFish X point: 3.3× params at equal GPU time
+  ≈ +20–50 Elo. PAPER.md §4.9.
+- **DeepMind opponents** (2026-11-09): `evaluate.py --vs "uci:sh bench/dm.sh 9M"` plays DeepMind's
+  searchless models through their own code (`bench/dm_uci.py`, venv from `bench/dm_requirements.txt`,
+  env DM_REPO / DM_CKPT / DM_PY; locally /home/user/google-deepmind, /home/user/dm_ckpt, /home/user/dmvenv).
+  Their engine runs one forward pass per legal move (action value), ours one per position.
+  **v4.1 vs DM 9M: +1 =55 −144 (14.2%), ~−310 Elo.** All losses are mates (median 88 plies), all
+  draws repetitions. v4.1 vs 136M / 270M run on Kaggle CPU notebooks `vibefish-dm136m-a/b`,
+  `vibefish-dm270m-a/b` (100 games each half, `--first-game 0/100`; outputs `results.jsonl` + PGN).
+  v2.1, v3 and v1.1 vs 9M run locally (queue in the session scratchpad; results go to bench/results.jsonl).
 
 ## Next steps, in order
 
