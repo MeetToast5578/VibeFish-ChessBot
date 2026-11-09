@@ -255,18 +255,25 @@ def main():
         for gr in opt.param_groups:
             gr["lr"] = lr * gr["mult"]
         batch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(sources, counts) if n for p in s.take(n)])]
-        with torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda"):   # mixed precision on GPUs only (slower on this CPU)
-            pol, act, val, _ = losses(fast, batch) if args.w_plain else (zero, zero, zero, None)
-            cb, rk = cand_losses(fast, batch, args.cand_pos, args.cand_k) if args.cand else (zero, zero)
-            if cand_sources:   # one graded move per row: candidate BCE only
-                cbatch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(cand_sources, cand_counts) if n for p in s.take(n)])]
-                av, _ = cand_losses(fast, cbatch, args.cand_batch, 1, min_known=1)
-            else:
-                av = zero
-        loss = (args.w_plain * (pol + args.w_action * act + args.w_value * val) + args.w_cand * cb + args.w_rank * rk
-                + args.w_cand * av)
         opt.zero_grad(set_to_none=True)
-        scaler.scale(loss).backward()
+
+        def back(part):   # backward per part, so only one part's graph is in GPU memory at a time
+            if part.requires_grad:
+                scaler.scale(part).backward()
+
+        amp_on = lambda: torch.autocast("cuda", dtype=amp, enabled=dev.type == "cuda")   # mixed precision on GPUs only
+        with amp_on():
+            pol, act, val, _ = losses(fast, batch) if args.w_plain else (zero, zero, zero, None)
+        back(args.w_plain * (pol + args.w_action * act + args.w_value * val))
+        with amp_on():
+            cb, rk = cand_losses(fast, batch, args.cand_pos, args.cand_k) if args.cand else (zero, zero)
+        back(args.w_cand * cb + args.w_rank * rk)
+        av = zero
+        if cand_sources:   # one graded move per row: candidate BCE only
+            cbatch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(cand_sources, cand_counts) if n for p in s.take(n)])]
+            with amp_on():
+                av, _ = cand_losses(fast, cbatch, args.cand_batch, 1, min_known=1)
+            back(args.w_cand * av)
         scaler.unscale_(opt)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         scaler.step(opt)
