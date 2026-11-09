@@ -4,8 +4,9 @@
 
 A **small, searchless** chess bot.
 
-- **Searchless:** the network looks only at the *current* position (once, or a handful of
-  times, e.g. a mirrored copy) and picks a move. Nothing evaluates positions after a candidate
+- **Searchless (as DeepMind defines it):** the network looks only at the *current* position (once,
+  a handful of times, e.g. a mirrored copy, or once per legal move with that move marked, like
+  DeepMind's action-value engine; owner-approved 2026-11-09) and picks a move. Nothing evaluates positions after a candidate
   move: no 1-ply lookahead, no MCTS, no alpha-beta. Reusing the same layers several times on the
   current position (a deeper pass, item 23) is allowed: it never looks at any other position.
 - **Network only:** no opening book and no tablebase probing at play time. Books, tablebases and
