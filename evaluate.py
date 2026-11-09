@@ -48,15 +48,21 @@ def make_pick(spec):
         net.load_state_dict(torch.load(weights if os.path.exists(weights) else os.path.join(path, "run/model.pt")))
         net.eval()
         return lambda b: net.pick(b)
+    if kind == "uci":   # any UCI engine, e.g. bench/dm_uci.py; no timeout, big models are slow on CPU
+        eng = chess.engine.SimpleEngine.popen_uci(path.split(), timeout=None)
+        return lambda b: eng.play(b, chess.engine.Limit(time=1)).move
     from model import load, without_history
     net = load(path)
     return lambda b: net.pick(without_history(b) if strip else b, mix=mix)
 
 
 def spec_of(arg):
-    """'v1:<dir>' (e.g. v1:models/v1) -> v1 spec, anything else -> a model path, optionally 'path@mix'."""
+    """'v1:<dir>' (e.g. v1:models/v1) -> v1 spec, 'uci:<command>' -> a UCI engine, anything else -> a
+    model path, optionally 'path@mix'."""
     if arg.startswith("v1:"):
         return ("v1", arg[3:], None, False)
+    if arg.startswith("uci:"):
+        return ("uci", arg[4:], None, False)
     path, _, mix = arg.partition("@")
     return ("v2", path, float(mix or 0), False)
 
@@ -138,8 +144,8 @@ def _game(args):
     return (pts if bot_white else 1 - pts), board
 
 
-def match(pool, elo, games, pgn=None, me="VibeFish", opp=None, movetime=0.1):
-    res = pool.map(_game, [(elo, g, movetime) for g in range(games)], chunksize=1)
+def match(pool, elo, games, pgn=None, me="VibeFish", opp=None, movetime=0.1, first=0):
+    res = pool.map(_game, [(elo, g, movetime) for g in range(first, first + games)], chunksize=1)
     pts = [r[0] for r in res]
     s = float(np.mean(pts))
     opp = opp or f"opp {elo}"
@@ -168,6 +174,7 @@ if __name__ == "__main__":
     p.add_argument("--match", default="", help="comma list of UCI_Elo levels and/or 'random'")
     p.add_argument("--vs", help="also play a head-to-head match vs this model (path or path@mix, or v1:models/v1)")
     p.add_argument("--games", type=int, default=40)
+    p.add_argument("--first-game", type=int, default=0, help="start at this game number (to split a match: same openings)")
     p.add_argument("--movetime", type=float, default=0.1, help="Stockfish seconds per move")
     p.add_argument("--pgn")
     p.add_argument("--workers", type=int, default=os.cpu_count())
@@ -181,7 +188,7 @@ if __name__ == "__main__":
             out.update(heldout(pool)); print(out, flush=True)
         if a.puzzles:
             out.update(puzzles(pool)); print(out, flush=True)
-        out["matches"] = [match(pool, e, a.games, a.pgn, a.v1 or a.model, a.vs if e == "vs" else None, a.movetime) for e in opps]
+        out["matches"] = [match(pool, e, a.games, a.pgn, a.v1 or a.model, a.vs if e == "vs" else None, a.movetime, a.first_game) for e in opps]
     print(json.dumps(out))
     if a.log:
         with open(a.log, "a") as f:

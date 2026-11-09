@@ -239,6 +239,24 @@ D1–D6 0.22; 101M positions. EMA: puzzles 58.4%, held-out 0.031 / 50.5%. 200 ga
 89.0% vs v2, 38.5% vs v3. 120 games: random +113 =7 −0, SF 1320 87.5% (1658), SF 1600 67.9% (1730),
 SF 2000 35.0% (1892; mix 2: 38.3%, 1917). Lesson: data and method, not size, made most of v1→v3.
 
+### v2.1: v2's size, same recipe and budget as v1.1 (2026-11-09)
+
+`vibefish-v2-1`: d=192, 6 layers, 6 heads (2.9M), v1.1's exact mix, lr and 180 min on one T4
+(~3,900 pos/s, 2.4× slower than v1.1), 41.9M positions. EMA: puzzles 57.9% (mix 2: 58.0%), held-out
+0.0278 / 52.1%. 200 games: **52.5% vs v1.1** (+59 =92 −49), 89.2% vs v2, 43.2% vs v3 (v1.1: 38.5%).
+120 games: random +117 =3 −0, SF 1320 91.7% (1737), SF 1600 70.4% (1751), SF 2000 42.1% (1945).
+**First VibeFish X point (size at a fixed 3 GPU-h budget):** 3.3× the parameters on 0.41× the
+positions gives ~+20–50 Elo, inside two match-noise bands. Both runs were still improving at the
+end, so at this budget neither size is saturated; the size sweep needs longer runs to find the knee.
+
+### DeepMind's searchless models as opponents (2026-11-09)
+
+`bench/dm_uci.py` runs their checkpoints through their own code. 200 games each vs **DM 9M**: v4.1
+14.2% (+1 =55 −144), v1.1 13.0%, v2.1 12.2%, v3 9.5%. 34–42 of each model's draws are DeepMind ≥3
+points of material up and repeating (its argmax can't convert won positions), so these scores flatter
+us. The "approach DM 9M" long-term goal is still far off: ≥300 Elo, more likely ~500. 136M / 270M
+vs v4.1 running on Kaggle CPU notebooks `vibefish-dm{136m,270m}-{a,b}`.
+
 ### v4.2: D6 self-play round (not shipped, 2026-11-08)
 
 D6: 4,000 games from v4.1 at depth 12, 320k positions, own moves lose 0.0222 wp (D5: 0.0236).

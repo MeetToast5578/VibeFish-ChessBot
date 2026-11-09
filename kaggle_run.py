@@ -17,7 +17,8 @@ import tarfile
 import tempfile
 import time
 
-CODE = ["model.py", "teacher.py", "data.py", "train.py", "evaluate.py", "bench/exclude.txt", "bench/heldout_fens.txt"]
+CODE = ["model.py", "teacher.py", "data.py", "train.py", "evaluate.py", "bench/exclude.txt", "bench/heldout_fens.txt",
+        "bench/dm_uci.py", "bench/dm.sh", "bench/dm_requirements.txt"]
 
 JOB = '''import base64, glob, io, os, subprocess, sys, tarfile
 tarfile.open(fileobj=io.BytesIO(base64.b64decode("{code}"))).extractall("/tmp/vf")
