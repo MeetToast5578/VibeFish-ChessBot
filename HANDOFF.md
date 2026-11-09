@@ -35,6 +35,8 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   `vibefish-dm270m-a/b` (100 games each half, `--first-game 0/100`; outputs `results.jsonl` + PGN).
   vs 9M, 200 games: v1.1 13.0%, v2.1 12.2%, v3 9.5%. Most draws (34–42 per model) are DeepMind
   ≥3 points up and repeating instead of converting, so the real gap is bigger. PAPER.md §4.10.
+  **DM 136M vs v4.1: +0 =26 −174 (6.5%).** 270M still running (`vibefish-dm270m-a/b`, backups `-c/-d`
+  for games 0–99; games 100–199 have no backup yet: Kaggle allows 5 CPU sessions).
 
 ## Next steps, in order
 

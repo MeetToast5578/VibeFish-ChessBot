@@ -411,7 +411,10 @@ Every loss is a checkmate (median 88 plies). Most draws are repetitions in posit
 winning: when many moves score near 100%, its argmax shuffles instead of converting, a weakness of the
 plain action-value engine. Counting only draws from level positions, VibeFish's real score is ~2–4%.
 The four VibeFish models are nearly indistinguishable against it; v4.1 holds the most level draws
-(12, vs 4–9). Likely reasons for the gap: ~15B action-value labels vs our few hundred million
+(12, vs 4–9).
+
+**v4.1 vs DeepMind 136M** (200 games, two Kaggle CPU notebooks): **+0 =26 −174 (6.5%)**; 19 of the 26
+draws were again DeepMind ≥3 points up. The 270M match is still running. Likely reasons for the gap: ~15B action-value labels vs our few hundred million
 positions, and 30× more network compute per move.
 
 ## 5. Results summary

@@ -254,8 +254,10 @@ end, so at this budget neither size is saturated; the size sweep needs longer ru
 `bench/dm_uci.py` runs their checkpoints through their own code. 200 games each vs **DM 9M**: v4.1
 14.2% (+1 =55 −144), v1.1 13.0%, v2.1 12.2%, v3 9.5%. 34–42 of each model's draws are DeepMind ≥3
 points of material up and repeating (its argmax can't convert won positions), so these scores flatter
-us. The "approach DM 9M" long-term goal is still far off: ≥300 Elo, more likely ~500. 136M / 270M
-vs v4.1 running on Kaggle CPU notebooks `vibefish-dm{136m,270m}-{a,b}`.
+us. The "approach DM 9M" long-term goal is still far off: ≥300 Elo, more likely ~500. **DM 136M vs
+v4.1: +0 =26 −174 (6.5%)**, 19 of 26 draws DM ≥3 up (each 100-game half took 6.4–10.8 h on a Kaggle
+CPU notebook). 270M vs v4.1 running: `vibefish-dm270m-a/b` (100 games each, may hit the 12 h cap),
+backups `-c`/`-d` (games 0–49 / 50–99).
 
 ### v4.2: D6 self-play round (not shipped, 2026-11-08)
 
