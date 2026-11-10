@@ -57,6 +57,7 @@ def main():
     p.add_argument("--cmd", action="append", required=True)
     p.add_argument("--gpu", default="NvidiaTeslaT4")
     p.add_argument("--cpu", action="store_true", help="CPU-only notebook (doesn't use GPU quota), e.g. for Stockfish grading")
+    p.add_argument("--tpu", action="store_true", help="TPU notebook (Kaggle TpuV5E8, separate 20 h/week quota)")
     p.add_argument("--kernel-source", action="append", default=[], help="attach another notebook's output, user/slug")
     p.add_argument("--wait", action="store_true", help="poll until done, then download outputs to kaggle_out/<name>")
     a = p.parse_args()
@@ -64,8 +65,8 @@ def main():
     with tempfile.TemporaryDirectory() as d:
         open(f"{d}/job.py", "w").write(JOB.format(code=pack(), cmds=a.cmd))
         json.dump({"id": ref, "title": a.name, "code_file": "job.py", "language": "python",
-                   "kernel_type": "script", "is_private": True, "enable_gpu": not a.cpu, "enable_internet": True,
-                   "machine_shape": None if a.cpu else a.gpu, "dataset_sources": a.dataset,
+                   "kernel_type": "script", "is_private": True, "enable_gpu": not (a.cpu or a.tpu), "enable_tpu": a.tpu,
+                   "enable_internet": True, "machine_shape": "TpuV5E8" if a.tpu else None if a.cpu else a.gpu, "dataset_sources": a.dataset,
                    "kernel_sources": a.kernel_source}, open(f"{d}/kernel-metadata.json", "w"))
         r = kaggle("kernels", "push", "-p", d)
         print(r.stdout.strip(), r.stderr.strip())
