@@ -120,3 +120,45 @@ def test_opponent_spec_takes_a_mix():
     assert evaluate.spec_of("models/a.pt") == ("v2", "models/a.pt", 0.0, False)
     assert evaluate.spec_of("v1:models/v1")[:2] == ("v1", "models/v1")
     assert evaluate.spec_of("uci:sh dm.sh 9M")[:2] == ("uci", "sh dm.sh 9M")
+
+
+def test_candidate_mode_adds_without_changing_one_pass_and_scores_legal_moves():
+    from model import with_cand
+    torch.manual_seed(0)
+    m = ChessGPT(d=32, layers=2, heads=2, bias=True).eval()
+    c = with_cand(m).eval()
+    for b in random_boards(8, seed=3):
+        if b.is_game_over():
+            continue
+        x = torch.from_numpy(encode(b))[None]
+        for a, z in zip(m(x), c(x)):   # the one-pass outputs are untouched
+            assert torch.allclose(a, z)
+        legal, s = c.scores(b, cand=True)
+        assert legal == legal_indices(b) and s.shape == (len(legal),)
+        one = torch.stack([c(x, torch.tensor([i]))[0] for i in legal])   # batched == one pass per move
+        assert torch.allclose(s, one, atol=1e-5)
+        assert c.pick(b, cand=True) in b.legal_moves
+
+
+def test_candidate_marks_change_the_output():
+    from model import with_cand
+    torch.manual_seed(0)
+    c = with_cand(ChessGPT(d=32, layers=2, heads=2))
+    torch.nn.init.normal_(c.cand_emb.weight)
+    b = chess.Board()
+    legal, s = c.scores(b, cand=True)
+    assert len(set(s.tolist())) > 1   # different moves get different scores
+
+
+def test_opponent_spec_takes_cand():
+    import evaluate
+    assert evaluate.spec_of("models/a.pt@cand") == ("v2", "models/a.pt", "cand", False)
+
+
+def test_chessbench_action_value_record_parses_to_our_score():
+    import struct
+    fen, mv, wp = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1", "e7e5", 0.4
+    rec = bytes([len(fen)]) + fen.encode() + bytes([len(mv)]) + mv.encode() + struct.pack(">d", wp)
+    f, moves, scores = data.parse_av(rec)
+    assert f == fen and moves == [] and list(scores) == [mv]
+    assert abs(float(teacher.to_grade(scores[mv])) - wp) < 1e-3   # same win-prob curve both ways

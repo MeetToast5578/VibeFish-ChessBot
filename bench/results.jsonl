@@ -80,3 +80,8 @@
 {"model": "models/vibefish_v1_1_ema.pt", "mix": 0.0, "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 9M", "movetime": 0.1, "W": 0, "D": 52, "L": 148, "score": 0.13}]}
 {"model": "/kaggle/input/notebooks/yunus0901/vibefish-v41-ft/runs/v41_ft/ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 136M", "movetime": 0.1, "W": 0, "D": 18, "L": 82, "score": 0.09}]}
 {"model": "/kaggle/input/notebooks/yunus0901/vibefish-v41-ft/runs/v41_ft/ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 136M", "movetime": 0.1, "W": 0, "D": 8, "L": 92, "score": 0.04}]}
+{"model": "models/vibefish_v4_3.pt", "mix": 2.0, "strip_history": false, "wp_lost": 0.0222, "top1": 0.55, "puzzles": 0.6524, "puz_400": 1.0, "puz_800": 0.987, "puz_1200": 0.947, "puz_1600": 0.82, "puz_2000": 0.52, "puz_2400": 0.247, "puz_2800": 0.047, "matches": []}
+{"model": "models/vibefish_v4_3_ema.pt", "mix": 2.0, "strip_history": false, "wp_lost": 0.0222, "top1": 0.548, "puzzles": 0.6486, "puz_400": 1.0, "puz_800": 0.98, "puz_1200": 0.947, "puz_1600": 0.813, "puz_2000": 0.513, "puz_2400": 0.24, "puz_2800": 0.047, "matches": []}
+{"model": "models/vibefish_v4_3_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "models/vibefish_v4_1.pt@2", "movetime": 0.1, "W": 55, "D": 79, "L": 66, "score": 0.472}]}
+{"model": "models/vibefish_v4_3_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 9M", "movetime": 0.1, "W": 2, "D": 70, "L": 128, "score": 0.185}]}
+{"model": "models/vibefish_v4_3_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 100, "D": 56, "L": 44, "score": 0.64, "perf_elo": 2100}]}

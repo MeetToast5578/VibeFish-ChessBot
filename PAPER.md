@@ -414,8 +414,45 @@ The four VibeFish models are nearly indistinguishable against it; v4.1 holds the
 (12, vs 4–9).
 
 **v4.1 vs DeepMind 136M** (200 games, two Kaggle CPU notebooks): **+0 =26 −174 (6.5%)**; 19 of the 26
-draws were again DeepMind ≥3 points up. The 270M match is still running. Likely reasons for the gap: ~15B action-value labels vs our few hundred million
-positions, and 30× more network compute per move.
+draws were again DeepMind ≥3 points up. The 270M match was stopped (each 100-game half needed more than
+Kaggle's 12 h limit on CPU). Likely reasons for the gap: ~15B action-value labels vs our few hundred
+million positions, and 30× more network compute per move.
+
+### 4.11 v5 and v4.3: DeepMind's method and DeepMind's data
+
+Two attempts to close that gap, each a fine-tune of v4.1 on one Kaggle T4.
+
+**DeepMind's data.** ChessBench's action-value set grades every legal move of ~530M positions with
+Stockfish 16, as (position, move, win prob) records. DeepMind shuffled the records across all 2,148
+files, so one 1.2 GB file holds ~16.5M positions with about one graded move each; complete positions
+would need the full 1.1 TB. `data.py dmav` converts a file (verified row by row against the source);
+22M records went to Kaggle as `vibefish-dmav-0/1/2`. Such rows only fit losses on single moves: as a
+policy target, one random graded move would be wrong. `train.py` takes them as `:cand` or `:act` sources.
+
+**v5: candidate mode** (owner-approved rule change: one pass per legal move with that move marked, never
+a later position). v4.1 plus a zero-initialised from/to mark embedding and a new win-prob head, 240 min
+with BCE and a ranking loss on the best plus 3 random graded moves per position, and 16M DeepMind rows
+(BCE only). The candidate head reached 0.0235 held-out win prob lost per move after 1,000 of 8,000
+steps and never improved after; the one-pass policy was 0.0206. Blending policy with the candidate head
+gave nothing beyond noise. At our scale the separate per-move pass is not worth its 30× compute:
+DeepMind's version rests on billions of action-value samples. `models/vibefish_v5.pt` / `_ema.pt`, kept,
+not shipped.
+
+**v4.3: DeepMind's values on the one-pass head.** v4.1 fine-tuned 150 min (lr 5e-5) on the usual
+every-move data plus the same 16M DeepMind rows feeding only the one-pass action-value BCE (mix 2 uses
+that head). 10.8M positions. EMA, mix 2:
+
+| | v4.1 | **v4.3** |
+|---|---|---|
+| puzzles | 64.3% | 64.9% |
+| held-out wp lost | 0.0227 | 0.0222 |
+| vs SF 2000 (200) | 64.0% (2,100) | 64.0% (2,100) |
+| head to head (200) | | **47.2%** (+55 =79 −66) |
+| vs DeepMind 9M (200) | 14.2% (+1 =55 −144), 12 level draws | **18.5%** (+2 =70 −128), 20 level draws |
+
+v4.3 fails the gate (it loses to v4.1), so v4.1 stays shipped. It is the first model to move the
+DeepMind 9M score (+4.3 points, ~2σ): training on DeepMind's labels helps against DeepMind's play more
+than against our own. `models/vibefish_v4_3.pt` / `_ema.pt`.
 
 ## 5. Results summary
 

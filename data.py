@@ -7,6 +7,7 @@ which are pickled (reusable if the encoding changes) and encoded into .npz shard
   python data.py sf      --src data/eval_part.zst --start 0 --count 1000 --depth 12 --out data/heldout
   python data.py dagger  --model models/vibefish_v2.pt --games 2000 --depth 8 --out data/D1
   python data.py chessbench --src CB_BC --start 0 --count 20000000 --exclude bench/exclude.txt,bench/heldout_fens.txt --out data/CB
+  python data.py dmav --src CB_AV --file 7 --start 0 --count 8000000 --exclude bench/exclude.txt,bench/heldout_fens.txt --out data/AV7   # candidate-mode only
 """
 import argparse
 import io
@@ -27,6 +28,8 @@ from model import encode, orient_move, SEQ, NF
 EVAL_LINES = 20_000   # the first lines of the Lichess eval file are reserved for held-out evaluation
 # ChessBench (DeepMind, CC-BY 4.0): 527M Lichess positions with Stockfish 16's best move (50 ms/move)
 CB_BC = "https://storage.googleapis.com/searchless_chess/data/train/behavioral_cloning_data.bag"
+# ChessBench action-value set: (position, move, win prob) for every legal move, shuffled over 2,148 files
+CB_AV = "https://storage.googleapis.com/searchless_chess/data/train/action_value-{:05d}-of-02148_data.bag"
 
 
 def lichess_lines(path, start, count):
@@ -100,7 +103,7 @@ def to_shard(encoded, path):
     for r, (_, top) in enumerate(encoded):
         idx[r, :len(top)] = [i for i, _ in top]
         score[r, :len(top)] = [s for _, s in top]
-    np.savez(path, x=x, idx=idx, score=score)
+    np.savez_compressed(path, x=x, idx=idx, score=score)
     print(f"wrote {path}: {len(x)} positions, k={k}", flush=True)
 
 
@@ -182,11 +185,33 @@ def _encode_bc(recs):
     return out
 
 
+def parse_av(rec):
+    """ChessBench action-value record (varint-length FEN, varint-length move, big-endian float64 win
+    prob from Stockfish 16, same curve as ours) -> our record with that one move's centipawn score.
+    DeepMind shuffled these across all 2,148 files, so a position here has ~1 graded move."""
+    fields, i = [], 0
+    for _ in range(2):
+        n = shift = 0
+        while True:
+            c = rec[i]; i += 1
+            n |= (c & 127) << shift; shift += 7
+            if c < 128:
+                break
+        fields.append(rec[i:i + n].decode()); i += n
+    wp = min(max(struct.unpack(">d", rec[i:i + 8])[0], 1e-6), 1 - 1e-6)
+    return fields[0], [], {fields[1]: round(np.log(wp / (1 - wp)) / 0.00368208)}
+
+
+def _encode_av(recs):
+    return [encode_record(rec) for rec in map(parse_av, recs) if " ".join(rec[0].split()[:4]) not in _exclude]
+
+
 def cmd_chessbench(a):
     shard, buf = 0, []
-    src = CB_BC if a.src == "CB_BC" else a.src
+    av = a.cmd == "dmav"
+    src = (CB_AV.format(a.file) if av else CB_BC) if a.src in ("CB_BC", "CB_AV") else a.src
     with mp.Pool(a.workers, _init_exclude, (a.exclude,)) as pool:
-        for enc in pool.imap(_encode_bc, chunks(bag_records(src, a.start, a.count), 5000)):
+        for enc in pool.imap(_encode_av if av else _encode_bc, chunks(bag_records(src, a.start, a.count), 5000)):
             buf += enc
             if len(buf) >= a.shard_size:
                 to_shard(buf, f"{a.out}_{shard:02d}.npz"); shard += 1; buf = []
@@ -268,7 +293,8 @@ def cmd_puzzles(a):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("cmd", choices=["lichess", "sf", "dagger", "puzzles", "chessbench"])
+    p.add_argument("cmd", choices=["lichess", "sf", "dagger", "puzzles", "chessbench", "dmav"])
+    p.add_argument("--file", type=int, default=0, help="dmav: which of the 2,148 action-value files (with --src CB_AV)")
     p.add_argument("--exclude", help="comma list of files of FENs (first 4 fields) to skip")
     p.add_argument("--kmax", type=int, default=96, help="lichess: keep at most this many (best) moves per position")
     p.add_argument("--src", default="data/eval_part.zst")
@@ -285,4 +311,4 @@ if __name__ == "__main__":
     p.add_argument("--out")
     a = p.parse_args()
     {"lichess": cmd_lichess, "sf": cmd_sf, "dagger": cmd_dagger, "puzzles": cmd_puzzles,
-     "chessbench": cmd_chessbench}[a.cmd](a)
+     "chessbench": cmd_chessbench, "dmav": cmd_chessbench}[a.cmd](a)

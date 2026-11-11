@@ -38,6 +38,16 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   **DM 136M vs v4.1: +0 =26 −174 (6.5%).** 270M still running (`vibefish-dm270m-a/b`, backups `-c/-d`
   for games 0–99; games 100–199 have no backup yet: Kaggle allows 5 CPU sessions).
 
+- **v5 (candidate mode) and v4.3** (2026-11-10/11, PAPER.md §4.11): both fine-tunes of v4.1, neither
+  shipped. v5 = one pass per legal move (owner-approved, see CLAUDE.md): its head plateaued at 0.0235
+  held-out wp lost (policy 0.0206). v4.3 = 16M DeepMind action-value rows on the one-pass action head:
+  47.2% vs v4.1, SF 2000 64.0%, but 18.5% vs DeepMind 9M (v4.1 14.2%). DeepMind data: `data.py dmav`,
+  Kaggle datasets `vibefish-dmav-0/1/2` (22M rows); `train.py` mix tags `:cand` / `:act`.
+- **Compute:** `kaggle quota` shows GPU/TPU hours (resets Saturdays 00:00 UTC). GPU was spent this week;
+  20 TPU h unused (`kaggle_run.py --tpu`, TpuV5E8; the probe `vibefish-tpu-probe` sat queued for hours).
+  Kaggle can't cancel runs from the CLI: a new version does not stop a running one, and queued GPU
+  versions count against the 2-session limit.
+
 ## Next steps, in order
 
 0. **D6 done** (2026-11-08): 4,000 games from v4.1, 320k positions at depth 12, own moves lose
