@@ -1,7 +1,8 @@
-# VibeFish v4.1
+# VibeFish v5
 
-A small chess bot with **no search**. A 13.6M-parameter transformer looks at the board once and
-picks a move. No alpha-beta, no MCTS, no lookahead. Every bit of strength is in the network.
+A small chess bot with **no search**. A 13.8M-parameter transformer looks only at the current board:
+once per legal move, with that move marked, and plays the move it rates best (DeepMind's searchless
+method). No alpha-beta, no MCTS, no lookahead. Every bit of strength is in the network.
 
 ```bash
 python play.py              # play against it in the terminal
@@ -9,6 +10,21 @@ python play.py --uci        # UCI engine for chess GUIs / lichess-bot
 ```
 
 ## Results
+
+**v5** (`models/vibefish_v5_ema.pt`, shipped 2026-11-11) is v4.1 with candidate mode: a zero-initialised
+mark for a move's from/to squares and a win-probability head, fine-tuned 4 h on one T4 with our
+every-move data and 16M of DeepMind's graded moves. Against v4.1 (both at their best settings):
+
+| | v4.1 (one pass, `--mix 2`) | **v5 (one pass per legal move)** |
+|---|---|---|
+| head to head, 400 games | 46.4% | **53.6%** (+141 =147 −112) |
+| vs Stockfish `UCI_Elo` 2000, 400 games | 61.7% | 59.9% (2,060 / 2,080 perf; equal within noise) |
+| vs DeepMind searchless 9M, 200 games | 14.2% | **16.5%** |
+| time per move (CPU, 1 thread) | one pass | ~30 passes, ~0.1–0.2 s |
+
+v5 wins head to head, so it ships; on held-out positions and puzzles it is no better than v4.1, so the
+gain shows only in games. The table below is the one-pass line up to v4.1.
+
 
 Every number is **one forward pass per move**. v1–v3 use the policy head only. v4 and v4.1 add the
 action-value head's win-probability estimate for each move to the policy (`--mix 2`, the default).
@@ -62,10 +78,10 @@ levels understate it. v4.1 is ~2,100 there. At a fixed 3 GPU-hours, 3.3× the pa
 repeated instead of converting, so the true gap is larger than ~310 Elo. Their engine runs one pass per
 legal move (~30 per position), ours one per position. Details: `PAPER.md` §4.10.
 
-**Two attempts to close the gap (not shipped):** v5 adds DeepMind's method, one pass per legal move
-(`--cand`); its per-move head stalled below our one-pass policy. v4.3 trains v4.1's action-value head on
-16M of DeepMind's graded moves (`data.py dmav`): 18.5% against their 9M (v4.1 14.2%), but 47.2% head to
-head against v4.1, so v4.1 stays shipped. Details: `PAPER.md` §4.11.
+**Two attempts to close the gap:** v5 adds DeepMind's method, one pass per legal move (`--cand`), and
+ships (above): 16.5% against their 9M. v4.3 instead trains v4.1's one-pass action-value head on 16M of
+DeepMind's graded moves (`data.py dmav`): 18.5% against their 9M, but 47.2% head to head against v4.1,
+so it was not shipped. Details: `PAPER.md` §4.11.
 
 On Stockfish's limited-strength scale (at 0.1 s per move) v4 performs at **~2,040** against
 SF 2000 and 2,277 against SF 2400. v3 performs at 1,981 against SF 2000, v2 at ~1,350–1,650 and

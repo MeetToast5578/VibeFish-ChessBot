@@ -1,7 +1,8 @@
-# VibeFish: a small searchless chess transformer, from v1 to v4.1
+# VibeFish: a small searchless chess transformer, from v1 to v5
 
-*A technical report on building a chess bot that picks every move with one forward pass of a
-13.6M-parameter network, trained on Stockfish labels with free compute.*
+*A technical report on building a chess bot that picks every move by looking only at the current
+position with a 13.8M-parameter network (one pass per move up to v4.1, one per legal move from v5),
+trained on Stockfish labels with free compute.*
 
 ---
 
@@ -432,11 +433,19 @@ policy target, one random graded move would be wrong. `train.py` takes them as `
 **v5: candidate mode** (owner-approved rule change: one pass per legal move with that move marked, never
 a later position). v4.1 plus a zero-initialised from/to mark embedding and a new win-prob head, 240 min
 with BCE and a ranking loss on the best plus 3 random graded moves per position, and 16M DeepMind rows
-(BCE only). The candidate head reached 0.0235 held-out win prob lost per move after 1,000 of 8,000
-steps and never improved after; the one-pass policy was 0.0206. Blending policy with the candidate head
-gave nothing beyond noise. At our scale the separate per-move pass is not worth its 30× compute:
-DeepMind's version rests on billions of action-value samples. `models/vibefish_v5.pt` / `_ema.pt`, kept,
-not shipped.
+(BCE only). On held-out positions it looked like a failure: the candidate head reached 0.0235 win prob
+lost per move after 1,000 of 8,000 steps and never improved after, against 0.0206 for the one-pass
+policy, and blending the two gave nothing. In games it is the better player (EMA, candidate mode):
+
+| | v4.1 (`--mix 2`) | **v5** |
+|---|---|---|
+| head to head, 400 games | 46.4% | **53.6%** (+141 =147 −112, ~1.8σ) |
+| vs SF 2000, 400 games (same openings) | 61.7% | 59.9% (equal within noise) |
+| vs DeepMind 9M, 200 games | 14.2% (12 level draws) | 16.5% (+0 =66 −134, 11 level draws) |
+
+**v5 ships** (`models/vibefish_v5_ema.pt`): it beats the shipped model head to head, the project's gate.
+Held-out top-move accuracy and win prob lost did not predict this; per-move evaluation seems to help
+most in the positions games actually reach. It costs ~30 forward passes per move.
 
 **v4.3: DeepMind's values on the one-pass head.** v4.1 fine-tuned 150 min (lr 5e-5) on the usual
 every-move data plus the same 16M DeepMind rows feeding only the one-pass action-value BCE (mix 2 uses
@@ -450,13 +459,13 @@ that head). 10.8M positions. EMA, mix 2:
 | head to head (200) | | **47.2%** (+55 =79 −66) |
 | vs DeepMind 9M (200) | 14.2% (+1 =55 −144), 12 level draws | **18.5%** (+2 =70 −128), 20 level draws |
 
-v4.3 fails the gate (it loses to v4.1), so v4.1 stays shipped. It is the first model to move the
+v4.3 fails the gate (it loses to v4.1). It is the first model to move the
 DeepMind 9M score (+4.3 points, ~2σ): training on DeepMind's labels helps against DeepMind's play more
 than against our own. `models/vibefish_v4_3.pt` / `_ema.pt`.
 
 ## 5. Results summary
 
-All numbers are one forward pass per move. v4 and v4.1 use `mix = 2`.
+All numbers are one forward pass per move. v4 and v4.1 use `mix = 2`. v5 (one pass per legal move) is in §4.11.
 
 | | v1 | v2 | v3 | v4 | **v4.1** |
 |---|---|---|---|---|---|

@@ -250,11 +250,13 @@ SF 2000 35.0% (1892; mix 2: 38.3%, 1917). Lesson: data and method, not size, mad
 positions gives ~+20–50 Elo, inside two match-noise bands. Both runs were still improving at the
 end, so at this budget neither size is saturated; the size sweep needs longer runs to find the knee.
 
-### v5 and v4.3: DeepMind's method and data (2026-11-10/11, not shipped)
+### v5 (shipped 2026-11-11) and v4.3 (not shipped): DeepMind's method and data
 
 - **v5** (candidate mode, one pass per legal move): v4.1 + mark embedding + head, 240 min single T4,
   16M DeepMind rows. Candidate head 0.0235 held-out wp lost, flat after 1k steps; policy 0.0206.
-  Lesson: at our compute the per-move pass does not beat the one-pass heads.
+  Held-out said it was worse, but in games it beats v4.1 53.6% over 400 (SF 2000 equal within noise,
+  DeepMind 9M 16.5% vs 14.2%), so **v5 ships**. Lesson: held-out wp lost does not rank candidate mode
+  against one-pass play; trust games, 400 for close calls.
 - **v4.3**: v4.1 + 150 min, the same DeepMind rows on the one-pass action head only. 47.2% vs v4.1,
   SF 2000 64.0%, puzzles 64.9%, **DeepMind 9M 18.5%** (v4.1 14.2%). Helps against DeepMind, not overall.
 - **Next:** a long run, not a short fine-tune (v4.2 and v4.3 both lost to v4.1 after 150 min). Options:
