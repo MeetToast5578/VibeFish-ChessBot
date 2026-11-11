@@ -62,6 +62,11 @@ levels understate it. v4.1 is ~2,100 there. At a fixed 3 GPU-hours, 3.3× the pa
 repeated instead of converting, so the true gap is larger than ~310 Elo. Their engine runs one pass per
 legal move (~30 per position), ours one per position. Details: `PAPER.md` §4.10.
 
+**Two attempts to close the gap (not shipped):** v5 adds DeepMind's method, one pass per legal move
+(`--cand`); its per-move head stalled below our one-pass policy. v4.3 trains v4.1's action-value head on
+16M of DeepMind's graded moves (`data.py dmav`): 18.5% against their 9M (v4.1 14.2%), but 47.2% head to
+head against v4.1, so v4.1 stays shipped. Details: `PAPER.md` §4.11.
+
 On Stockfish's limited-strength scale (at 0.1 s per move) v4 performs at **~2,040** against
 SF 2000 and 2,277 against SF 2400. v3 performs at 1,981 against SF 2000, v2 at ~1,350–1,650 and
 v1 at ~975. Against weak opponents the perf numbers say little (v4 has 1 loss in 120 games

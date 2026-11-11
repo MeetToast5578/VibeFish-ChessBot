@@ -250,6 +250,17 @@ SF 2000 35.0% (1892; mix 2: 38.3%, 1917). Lesson: data and method, not size, mad
 positions gives ~+20–50 Elo, inside two match-noise bands. Both runs were still improving at the
 end, so at this budget neither size is saturated; the size sweep needs longer runs to find the knee.
 
+### v5 and v4.3: DeepMind's method and data (2026-11-10/11, not shipped)
+
+- **v5** (candidate mode, one pass per legal move): v4.1 + mark embedding + head, 240 min single T4,
+  16M DeepMind rows. Candidate head 0.0235 held-out wp lost, flat after 1k steps; policy 0.0206.
+  Lesson: at our compute the per-move pass does not beat the one-pass heads.
+- **v4.3**: v4.1 + 150 min, the same DeepMind rows on the one-pass action head only. 47.2% vs v4.1,
+  SF 2000 64.0%, puzzles 64.9%, **DeepMind 9M 18.5%** (v4.1 14.2%). Helps against DeepMind, not overall.
+- **Next:** a long run, not a short fine-tune (v4.2 and v4.3 both lost to v4.1 after 150 min). Options:
+  Kaggle TPU (20 h/week, needs a torch_xla port with fixed shapes), or a week's GPU on one continuing run
+  that mixes DeepMind rows with our every-move data from the start.
+
 ### DeepMind's searchless models as opponents (2026-11-09)
 
 `bench/dm_uci.py` runs their checkpoints through their own code. 200 games each vs **DM 9M**: v4.1
