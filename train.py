@@ -20,9 +20,11 @@ from data import load_shard
 from teacher import to_grade
 
 p = argparse.ArgumentParser()
-p.add_argument("--mix", required=True, help="comma list of glob:weight[:kmax[:cand]], kmax = max moves kept per position; "
+p.add_argument("--mix", required=True, help="comma list of glob:weight[:kmax[:cand|act]], kmax = max moves kept per position; "
                "a trailing :cand marks a candidate-only source (ChessBench action-value rows: one graded move per position)")
 p.add_argument("--cand-batch", type=int, default=512, help="rows per step drawn from the :cand sources")
+p.add_argument("--act-batch", type=int, default=512, help="rows per step drawn from :act sources (one graded move per row: "
+               "they train only the one-pass action-value head, never the policy or value)")
 p.add_argument("--heldout", default="data/heldout.npz")
 p.add_argument("--minutes", type=float, default=60)
 p.add_argument("--batch", type=int, default=512)
@@ -201,15 +203,16 @@ def main():
     torch.manual_seed(0)
     rng = np.random.default_rng(0)
     os.makedirs(args.out, exist_ok=True)
-    sources, cand_sources = [], []
+    sources, cand_sources, act_sources = [], [], []
     for item in args.mix.split(","):
         pattern, w, *rest = item.split(":")
         src = Source(pattern, float(w), rng, int(rest[0]) if rest and rest[0] else None)
-        (cand_sources if rest[1:] == ["cand"] else sources).append(src)
-        print(f"{pattern}: {src.n} positions, weight {w}{' (candidate only)' if rest[1:] == ['cand'] else ''}", flush=True)
+        tag = rest[1] if rest[1:] else ""
+        {"cand": cand_sources, "act": act_sources}.get(tag, sources).append(src)
+        print(f"{pattern}: {src.n} positions, weight {w}{f' ({tag} only)' if tag else ''}", flush=True)
     assert args.cand or not cand_sources, ":cand sources need --cand"
     split = lambda ss, n: [round(n * s.weight / sum(t.weight for t in ss)) for s in ss]
-    counts, cand_counts = split(sources, args.batch), split(cand_sources, args.cand_batch)
+    counts, cand_counts, act_counts = split(sources, args.batch), split(cand_sources, args.cand_batch), split(act_sources, args.act_batch)
     hx, hi, hs = load_shard(args.heldout)
     dev = torch.device(args.device)
     # bf16 only with hardware support (Ampere+); T4 reports bf16 "supported" but emulates it ~10x slower
@@ -247,7 +250,7 @@ def main():
     fast = torch.compile(model) if args.compile and not args.multi_gpu else model
     if args.multi_gpu and torch.cuda.device_count() > 1:
         fast = torch.nn.DataParallel(fast)
-    t0, step, seen, run = time.time(), 0, 0, np.zeros(6)
+    t0, step, seen, run = time.time(), 0, 0, np.zeros(7)
     zero = torch.zeros((), device=dev)
     budget = args.minutes * 60
     while (frac := (time.time() - t0) / budget) < 1:
@@ -274,6 +277,12 @@ def main():
             with amp_on():
                 av, _ = cand_losses(fast, cbatch, args.cand_batch, 1, min_known=1)
             back(args.w_cand * av)
+        ac = zero
+        if act_sources:   # one graded move per row: one-pass action-value BCE only
+            abatch = [t.to(dev, non_blocking=True) for t in to_batch([p for s, n in zip(act_sources, act_counts) if n for p in s.take(n)])]
+            with amp_on():
+                _, ac, _, _ = losses(fast, abatch)
+            back(args.w_action * ac)
         scaler.unscale_(opt)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         scaler.step(opt)
@@ -282,12 +291,13 @@ def main():
             torch._foreach_lerp_(list(ema.parameters()), list(model.parameters()), 1 - args.ema)
         step += 1
         seen += len(batch[0])
-        run = 0.98 * run + 0.02 * np.array([pol.item(), act.item(), val.item(), cb.item(), rk.item(), av.item()])
+        run = 0.98 * run + 0.02 * np.array([pol.item(), act.item(), val.item(), cb.item(), rk.item(), av.item(), ac.item()])
         if step % args.eval_every == 0:
             tr = run / (1 - 0.98 ** step)
             rec = {"step": step, "seen": seen, "min": round((time.time() - t0) / 60, 1), "lr": round(lr, 6),
                    "train_pol": round(float(tr[0]), 4), **({"train_cand": round(float(tr[3]), 4), "train_rank": round(float(tr[4]), 4)} if args.cand else {}),
                    **({"train_av": round(float(tr[5]), 4)} if cand_sources else {}),
+                   **({"train_act_av": round(float(tr[6]), 4)} if act_sources else {}),
                    **evaluate(model, held), **ema_eval(ema, held)}
             print(rec, flush=True)
             log.write(json.dumps(rec) + "\n"); log.flush()
