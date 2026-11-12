@@ -43,9 +43,9 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   move, owner-approved, see CLAUDE.md); `play.py` uses candidate mode for it. 53.6% vs v4.1 over 400
   games, SF 2000 59.9% vs 61.7% (noise), DeepMind 9M 16.5%. Held-out looked worse (0.0235 vs 0.0206),
   games say better. PAPER.md §4.11.
-- **D7 self-play** (v5, candidate mode, depth 12): 3,500 games / 262k positions in the outputs of Kaggle
-  notebooks `vibefish-d7-1..4` (`D7_10`–`D7_16`); the last 500 rerunning as `vibefish-d7-4a/-4b`
-  (`D7_17a/b`). Own moves lose ~0.024 wp. Attach with `--kernel-source yunus0901/vibefish-d7-N`.
+- **D7 self-play** (v5, candidate mode, depth 12): 4,000 games / 297,569 positions in the outputs of
+  Kaggle notebooks `vibefish-d7-1..4` (`D7_10`–`D7_16`) and `vibefish-d7-4a/-4b` (`D7_17a/b`). Own moves
+  lose ~0.024 wp. Attach with `--kernel-source yunus0901/vibefish-d7-N`.
 - **Next (GPU quota resets Sat 2026-11-14 00:00 UTC):** v5.1 = one long candidate-mode run from v5 EMA
   (`--cand`, kernel source `vibefish-v5`, `runs/v5/ema.pt`) with D7 + D6/D5 + DeepMind rows
   (`vibefish-dmav-0/1/2`, `:cand`); gate 400 games vs `models/vibefish_v5_ema.pt@cand`.

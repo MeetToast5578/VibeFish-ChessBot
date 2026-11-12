@@ -256,8 +256,8 @@ v5 EMA plays itself in candidate mode (`teacher.play_game` now uses it for candi
 position graded by SF 17.1 at depth 12. Kaggle CPU notebooks `vibefish-d7-1..4` (seeds 180000–183999,
 puzzle start rows 4.900M–4.908M), 2×500 games each; ~5.5 h per 500 games (candidate play is slower than
 D6's one-pass ~2 h), so `-4`'s second chunk hit the 12 h cap and was rerun as `vibefish-d7-4a/-4b`
-(250 games each, `D7_17a/b`). 3,500 games done so far: 261,988 positions (`D7_10`–`D7_16`), own moves
-lose 0.0232–0.0249 wp (D6 from v4.1: 0.0222). Part of the gap is sampling: the self-play temperatures
+(250 games each, `D7_17a/b`). All 4,000 games done: 297,569 positions (`D7_10`–`D7_16`, `D7_17a/b`),
+own moves lose 0.0232–0.0249 wp (D6 from v4.1: 0.0222). Part of the gap is sampling: the self-play temperatures
 (1.0 for 10 plies, 0.3 on 25% of moves) act on win-prob logits in candidate mode, not log-probs, so they
 are softer. Use for v5.1 (next GPU week): one long candidate-mode run from v5 EMA with D7 + D6/D5 +
 DeepMind rows, gated with 400 games vs `models/vibefish_v5_ema.pt@cand`.
