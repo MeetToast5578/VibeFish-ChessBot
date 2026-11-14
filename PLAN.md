@@ -250,6 +250,15 @@ SF 2000 35.0% (1892; mix 2: 38.3%, 1917). Lesson: data and method, not size, mad
 positions gives ~+20–50 Elo, inside two match-noise bands. Both runs were still improving at the
 end, so at this budget neither size is saturated; the size sweep needs longer runs to find the knee.
 
+### v5.1: one long run on D7 (shipped 2026-11-14)
+
+v5 EMA + 540 min candidate mode (`vibefish-v51`): D7 0.25, D6 0.15, D5 0.1, D4 0.05, D3 0.03, CB4_0[0-4]
+0.1, L/L2 halves, S2 0.15, S_puz, D1/D2, plus 16M DeepMind rows (`:cand`). 31k steps, 24M positions.
+Held-out candidate head 0.0235 → 0.0219 (EMA 0.0223); policy flat (0.0204). Gate vs v5, 400 games on the
+same openings: head to head 51.0% (+126 =156 −118), SF 2000 63.5% vs 59.9%, DeepMind 9M 16.8% vs 16.5%
+(+4 =59 −137, its first wins against it). Shipped: small but consistent. Next round: D8 self-play from
+v5.1, and a lower self-play sampling temperature in candidate mode (D7's moves lost 0.024 vs D6's 0.022).
+
 ### D7: self-play from v5 in candidate mode (2026-11-11/12)
 
 v5 EMA plays itself in candidate mode (`teacher.play_game` now uses it for candidate-mode models), every

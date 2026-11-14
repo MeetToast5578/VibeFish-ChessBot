@@ -51,8 +51,9 @@ Strength must come from data, features, losses and training.
   `KaggleApi._introspect_token` to skip that check. Never print or commit tokens.
 - Kaggle hides a running kernel's logs and outputs; poll `kaggle kernels status`, then
   `kaggle kernels output`. Sessions stop at 12 h, so keep CPU grading jobs to ≤ 4 h or split them.
-- Shipped model: `models/vibefish_v5_ema.pt` (v4.1 + candidate mode, one pass per legal move; 13.8M params,
-  d=256, 16 layers + attention bias; `play.py` uses candidate mode for it automatically). Compare new
-  candidates against it with `evaluate.py --vs models/vibefish_v5_ema.pt@cand` (add `--cand` for a
-  candidate-mode model, `--mix 2` for a one-pass one) and the Stockfish matches; 400 games for close calls.
-  Previous: `models/vibefish_v4_1.pt` (one pass, `--mix 2`).
+- Shipped model: `models/vibefish_v5_1_ema.pt` (v5 + 9 h more candidate-mode training on D7 self-play and
+  DeepMind rows; one pass per legal move; 13.8M params, d=256, 16 layers + attention bias; `play.py` uses
+  candidate mode for it automatically). Compare new candidates against it with
+  `evaluate.py --vs models/vibefish_v5_1_ema.pt@cand` (add `--cand` for a candidate-mode model, `--mix 2`
+  for a one-pass one) and the Stockfish matches; 400 games for close calls.
+  Previous: `models/vibefish_v5_ema.pt` (candidate mode), `models/vibefish_v4_1.pt` (one pass, `--mix 2`).

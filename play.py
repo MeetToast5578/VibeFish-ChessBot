@@ -56,7 +56,7 @@ def uci(pick, name):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="models/vibefish_v5_ema.pt")
+    p.add_argument("--model", default="models/vibefish_v5_1_ema.pt")
     p.add_argument("--uci", action="store_true")
     p.add_argument("--mix", type=float, default=2.0, help="one-pass models: weight of the action-value head (v4.x are tuned for 2)")
     p.add_argument("--one-pass", action="store_true", help="play a candidate-mode model with its one-pass heads instead")
@@ -66,4 +66,4 @@ if __name__ == "__main__":
     net = load(a.model)
     cand = net.cfg.get("cand", False) and not a.one_pass   # candidate-mode models play one pass per legal move
     pick = lambda b: net.pick(b, mix=a.mix, cand=cand)
-    uci(pick, "VibeFish v5") if a.uci else human(pick, not a.black)
+    uci(pick, "VibeFish v5.1") if a.uci else human(pick, not a.black)

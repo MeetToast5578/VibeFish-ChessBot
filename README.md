@@ -1,4 +1,4 @@
-# VibeFish v5
+# VibeFish v5.1
 
 A small chess bot with **no search**. A 13.8M-parameter transformer looks only at the current board:
 once per legal move, with that move marked, and plays the move it rates best (DeepMind's searchless
@@ -10,6 +10,11 @@ python play.py --uci        # UCI engine for chess GUIs / lichess-bot
 ```
 
 ## Results
+
+**v5.1** (`models/vibefish_v5_1_ema.pt`, shipped 2026-11-14) is v5 trained 9 h more in candidate mode on
+D7 (4,000 v5 self-play games graded at depth 12) plus earlier self-play and 16M DeepMind rows. Against v5,
+400 games each on the same openings: head to head **51.0%** (+126 =156 −118), SF 2000 **63.5%** (v5
+59.9%), DeepMind 9M 16.8% (v5 16.5%, 200 games). A small step; every measurement leans its way.
 
 **v5** (`models/vibefish_v5_ema.pt`, shipped 2026-11-11) is v4.1 with candidate mode: a zero-initialised
 mark for a move's from/to squares and a win-probability head, fine-tuned 4 h on one T4 with our

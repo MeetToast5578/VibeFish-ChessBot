@@ -1,4 +1,4 @@
-# VibeFish: a small searchless chess transformer, from v1 to v5
+# VibeFish: a small searchless chess transformer, from v1 to v5.1
 
 *A technical report on building a chess bot that picks every move by looking only at the current
 position with a 13.8M-parameter network (one pass per move up to v4.1, one per legal move from v5),
@@ -462,6 +462,28 @@ that head). 10.8M positions. EMA, mix 2:
 v4.3 fails the gate (it loses to v4.1). It is the first model to move the
 DeepMind 9M score (+4.3 points, ~2σ): training on DeepMind's labels helps against DeepMind's play more
 than against our own. `models/vibefish_v4_3.pt` / `_ema.pt`.
+
+### 4.12 v5.1: a self-play round in candidate mode
+
+**D7.** v5 played 4,000 games against itself in candidate mode (the way it plays when shipped), every
+position graded by Stockfish 17.1 at depth 12: 297,569 positions. Candidate play is slower than one-pass
+play (~5.5 h per 500 games on a Kaggle CPU notebook against ~2 h for D6), so one chunk hit Kaggle's 12 h
+limit and was rerun in halves. v5's own moves lost 0.024 win prob on average (v4.1 in D6: 0.022); part of
+that is sampling, since the self-play temperatures act on win-prob logits in candidate mode.
+
+**v5.1.** v5 EMA trained 540 min more in candidate mode (two T4s, lr 1e-4) on D7 (25%), D6/D5 and the
+other every-move data plus 16M DeepMind rows: 31k steps, 24M positions. The candidate head's held-out
+win prob lost fell from 0.0235 to 0.0219 (EMA 0.0223). Gate against v5, both in candidate mode:
+
+| | v5 | **v5.1** |
+|---|---|---|
+| head to head, 400 games | 49.0% | **51.0%** (+126 =156 −118) |
+| vs SF 2000, 400 games (same openings) | 59.9% | **63.5%** (perf ~2,097) |
+| vs DeepMind 9M, 200 games | 16.5% (+0 =66 −134) | **16.8%** (+4 =59 −137) |
+
+Each gap alone is within noise, but all point the same way, so **v5.1 ships**
+(`models/vibefish_v5_1_ema.pt`). Its 4 wins are the first by a candidate-mode VibeFish against
+DeepMind's 9M.
 
 ## 5. Results summary
 

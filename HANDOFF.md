@@ -4,7 +4,11 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 
 ## Where things stand
 
-- **Shipped: v5** = `models/vibefish_v5_ema.pt` (see the v5 entry below).
+- **Shipped: v5.1** = `models/vibefish_v5_1_ema.pt` (2026-11-14): v5 + 540 min candidate mode on one Kaggle
+  T4x2 (`vibefish-v51`, lr 1e-4, D7 0.25 / D6 0.15 / D5 0.1 / every-move data / 16M DeepMind rows as
+  `:cand`), 24M positions. vs v5 over 400 games: 51.0% head to head, SF 2000 63.5% vs 59.9%, DeepMind 9M
+  16.8% vs 16.5%. Held-out candidate head 0.0219 (v5 0.0235). GPU used ~9.5 h of this week's 30 h.
+- **Previous: v5** = `models/vibefish_v5_ema.pt` (see the v5 entry below).
 - **Previous: v4.1** = `models/vibefish_v4_1.pt` (copy of `vibefish_v41_ft_ema.pt`), played with
   `--mix 2` (`play.py`'s default). It is v4 (`models/vibefish_v4.pt`, PR #24) fine-tuned for 150 min
   (`vibefish-v41-ft`, lr 5e-5, from v4's EMA) with D5 25%, D4 10%, CB4 20%, every-move data ≥ 50%;
