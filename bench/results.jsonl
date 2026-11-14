@@ -85,3 +85,14 @@
 {"model": "models/vibefish_v4_3_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "models/vibefish_v4_1.pt@2", "movetime": 0.1, "W": 55, "D": 79, "L": 66, "score": 0.472}]}
 {"model": "models/vibefish_v4_3_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 9M", "movetime": 0.1, "W": 2, "D": 70, "L": 128, "score": 0.185}]}
 {"model": "models/vibefish_v4_3_ema.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 100, "D": 56, "L": 44, "score": 0.64, "perf_elo": 2100}]}
+{"model": "models/vibefish_v5_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "models/vibefish_v4_1.pt@2", "movetime": 0.1, "W": 68, "D": 73, "L": 59, "score": 0.522}]}
+{"model": "models/vibefish_v5_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "models/vibefish_v4_1.pt@2", "movetime": 0.1, "W": 73, "D": 74, "L": 53, "score": 0.55}]}
+{"model": "models/vibefish_v5_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 9M", "movetime": 0.1, "W": 0, "D": 66, "L": 134, "score": 0.165}]}
+{"model": "models/vibefish_v5_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 91, "D": 52, "L": 57, "score": 0.585, "perf_elo": 2060}]}
+{"model": "models/vibefish_v5_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 94, "D": 57, "L": 49, "score": 0.613, "perf_elo": 2080}]}
+{"model": "models/vibefish_v4_1.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 98, "D": 41, "L": 61, "score": 0.593, "perf_elo": 2065}]}
+{"model": "models/vibefish_v5_1_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "models/vibefish_v5_ema.pt@cand", "movetime": 0.1, "W": 64, "D": 69, "L": 67, "score": 0.492}]}
+{"model": "models/vibefish_v5_1_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "models/vibefish_v5_ema.pt@cand", "movetime": 0.1, "W": 62, "D": 87, "L": 51, "score": 0.527}]}
+{"model": "models/vibefish_v5_1_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "uci:sh bench/dm.sh 9M", "movetime": 0.1, "W": 4, "D": 59, "L": 137, "score": 0.168}]}
+{"model": "models/vibefish_v5_1_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 99, "D": 59, "L": 42, "score": 0.642, "perf_elo": 2102}]}
+{"model": "models/vibefish_v5_1_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 106, "D": 39, "L": 55, "score": 0.627, "perf_elo": 2091}]}

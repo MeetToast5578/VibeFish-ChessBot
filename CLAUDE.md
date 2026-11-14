@@ -20,7 +20,7 @@ Strength must come from data, features, losses and training.
 | `bench/` | benchmark sets (never trained on) + `results.jsonl` of every evaluation |
 | `tests/` | `python -m pytest -q tests` |
 | `HANDOFF.md` | where the work stopped last and what to do next (read first) |
-| `PAPER.md` | technical report of the whole project (v1 → v4.1); update it when a version ships |
+| `PAPER.md` | technical report of the whole project (v1 → v5); update it when a version ships |
 | `PLAN.md` | goals, experiment protocol, data/compute inventory, lessons, roadmap. Keep it updated as steps finish. |
 
 ## Conventions
@@ -51,5 +51,9 @@ Strength must come from data, features, losses and training.
   `KaggleApi._introspect_token` to skip that check. Never print or commit tokens.
 - Kaggle hides a running kernel's logs and outputs; poll `kaggle kernels status`, then
   `kaggle kernels output`. Sessions stop at 12 h, so keep CPU grading jobs to ≤ 4 h or split them.
-- Shipped model: `models/vibefish_v4_1.pt` (v4 fine-tuned on depth-12 self-play; 13.6M params, d=256, 16 layers + attention bias, played with `--mix 2`). Compare new candidates
-  against it with `evaluate.py --mix 2 --vs models/vibefish_v4_1.pt@2` and the Stockfish matches.
+- Shipped model: `models/vibefish_v5_1_ema.pt` (v5 + 9 h more candidate-mode training on D7 self-play and
+  DeepMind rows; one pass per legal move; 13.8M params, d=256, 16 layers + attention bias; `play.py` uses
+  candidate mode for it automatically). Compare new candidates against it with
+  `evaluate.py --vs models/vibefish_v5_1_ema.pt@cand` (add `--cand` for a candidate-mode model, `--mix 2`
+  for a one-pass one) and the Stockfish matches; 400 games for close calls.
+  Previous: `models/vibefish_v5_ema.pt` (candidate mode), `models/vibefish_v4_1.pt` (one pass, `--mix 2`).

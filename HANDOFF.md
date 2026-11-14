@@ -1,10 +1,15 @@
-# Handoff (2026-11-08, ~15:45 UTC)
+# Handoff (2026-11-11, ~20:00 UTC)
 
 State of the work when it was paused, and what to do next. Read `CLAUDE.md` and `PLAN.md` too.
 
 ## Where things stand
 
-- **Shipped: v4.1** = `models/vibefish_v4_1.pt` (copy of `vibefish_v41_ft_ema.pt`), played with
+- **Shipped: v5.1** = `models/vibefish_v5_1_ema.pt` (2026-11-14): v5 + 540 min candidate mode on one Kaggle
+  T4x2 (`vibefish-v51`, lr 1e-4, D7 0.25 / D6 0.15 / D5 0.1 / every-move data / 16M DeepMind rows as
+  `:cand`), 24M positions. vs v5 over 400 games: 51.0% head to head, SF 2000 63.5% vs 59.9%, DeepMind 9M
+  16.8% vs 16.5%. Held-out candidate head 0.0219 (v5 0.0235). GPU used ~9.5 h of this week's 30 h.
+- **Previous: v5** = `models/vibefish_v5_ema.pt` (see the v5 entry below).
+- **Previous: v4.1** = `models/vibefish_v4_1.pt` (copy of `vibefish_v41_ft_ema.pt`), played with
   `--mix 2` (`play.py`'s default). It is v4 (`models/vibefish_v4.pt`, PR #24) fine-tuned for 150 min
   (`vibefish-v41-ft`, lr 5e-5, from v4's EMA) with D5 25%, D4 10%, CB4 20%, every-move data ≥ 50%;
   18.4M positions, no slowdown. Every model of the line is kept in `models/`.
@@ -38,9 +43,17 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   **DM 136M vs v4.1: +0 =26 −174 (6.5%).** 270M still running (`vibefish-dm270m-a/b`, backups `-c/-d`
   for games 0–99; games 100–199 have no backup yet: Kaggle allows 5 CPU sessions).
 
-- **v5 (candidate mode) and v4.3** (2026-11-10/11, PAPER.md §4.11): both fine-tunes of v4.1, neither
-  shipped. v5 = one pass per legal move (owner-approved, see CLAUDE.md): its head plateaued at 0.0235
-  held-out wp lost (policy 0.0206). v4.3 = 16M DeepMind action-value rows on the one-pass action head:
+- **v5 SHIPPED (2026-11-11)**: `models/vibefish_v5_ema.pt`, v4.1 + candidate mode (one pass per legal
+  move, owner-approved, see CLAUDE.md); `play.py` uses candidate mode for it. 53.6% vs v4.1 over 400
+  games, SF 2000 59.9% vs 61.7% (noise), DeepMind 9M 16.5%. Held-out looked worse (0.0235 vs 0.0206),
+  games say better. PAPER.md §4.11.
+- **D7 self-play** (v5, candidate mode, depth 12): 4,000 games / 297,569 positions in the outputs of
+  Kaggle notebooks `vibefish-d7-1..4` (`D7_10`–`D7_16`) and `vibefish-d7-4a/-4b` (`D7_17a/b`). Own moves
+  lose ~0.024 wp. Attach with `--kernel-source yunus0901/vibefish-d7-N`.
+- **Next (GPU quota resets Sat 2026-11-14 00:00 UTC):** v5.1 = one long candidate-mode run from v5 EMA
+  (`--cand`, kernel source `vibefish-v5`, `runs/v5/ema.pt`) with D7 + D6/D5 + DeepMind rows
+  (`vibefish-dmav-0/1/2`, `:cand`); gate 400 games vs `models/vibefish_v5_ema.pt@cand`.
+- **v4.3** (not shipped): v4.3 = 16M DeepMind action-value rows on the one-pass action head:
   47.2% vs v4.1, SF 2000 64.0%, but 18.5% vs DeepMind 9M (v4.1 14.2%). DeepMind data: `data.py dmav`,
   Kaggle datasets `vibefish-dmav-0/1/2` (22M rows); `train.py` mix tags `:cand` / `:act`.
 - **Compute:** `kaggle quota` shows GPU/TPU hours (resets Saturdays 00:00 UTC). GPU was spent this week;

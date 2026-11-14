@@ -108,7 +108,8 @@ def play_game(seed, max_plies=200):
         records.append((fens[start], [m.uci() for m in board.move_stack[start:]], scores))
         temp = 1.0 if n < 10 else (0.3 if rng.random() < 0.25 else 0.0)
         from model import without_history   # a model trained only on history-free data plays better without it
-        move = _model.pick(without_history(board) if _strip else board, temperature=temp)   # policy only, as shipped
+        move = _model.pick(without_history(board) if _strip else board, temperature=temp,
+                           cand=_model.cfg.get("cand", False))   # candidate-mode models play one pass per legal move, as shipped
         best = max(scores.values())
         if move.uci() in scores:
             lost.append(float(to_grade(best).clip(0, 1) - to_grade(scores[move.uci()]).clip(0, 1)))

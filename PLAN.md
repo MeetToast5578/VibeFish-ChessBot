@@ -250,11 +250,34 @@ SF 2000 35.0% (1892; mix 2: 38.3%, 1917). Lesson: data and method, not size, mad
 positions gives ~+20–50 Elo, inside two match-noise bands. Both runs were still improving at the
 end, so at this budget neither size is saturated; the size sweep needs longer runs to find the knee.
 
-### v5 and v4.3: DeepMind's method and data (2026-11-10/11, not shipped)
+### v5.1: one long run on D7 (shipped 2026-11-14)
+
+v5 EMA + 540 min candidate mode (`vibefish-v51`): D7 0.25, D6 0.15, D5 0.1, D4 0.05, D3 0.03, CB4_0[0-4]
+0.1, L/L2 halves, S2 0.15, S_puz, D1/D2, plus 16M DeepMind rows (`:cand`). 31k steps, 24M positions.
+Held-out candidate head 0.0235 → 0.0219 (EMA 0.0223); policy flat (0.0204). Gate vs v5, 400 games on the
+same openings: head to head 51.0% (+126 =156 −118), SF 2000 63.5% vs 59.9%, DeepMind 9M 16.8% vs 16.5%
+(+4 =59 −137, its first wins against it). Shipped: small but consistent. Next round: D8 self-play from
+v5.1, and a lower self-play sampling temperature in candidate mode (D7's moves lost 0.024 vs D6's 0.022).
+
+### D7: self-play from v5 in candidate mode (2026-11-11/12)
+
+v5 EMA plays itself in candidate mode (`teacher.play_game` now uses it for candidate-mode models), every
+position graded by SF 17.1 at depth 12. Kaggle CPU notebooks `vibefish-d7-1..4` (seeds 180000–183999,
+puzzle start rows 4.900M–4.908M), 2×500 games each; ~5.5 h per 500 games (candidate play is slower than
+D6's one-pass ~2 h), so `-4`'s second chunk hit the 12 h cap and was rerun as `vibefish-d7-4a/-4b`
+(250 games each, `D7_17a/b`). All 4,000 games done: 297,569 positions (`D7_10`–`D7_16`, `D7_17a/b`),
+own moves lose 0.0232–0.0249 wp (D6 from v4.1: 0.0222). Part of the gap is sampling: the self-play temperatures
+(1.0 for 10 plies, 0.3 on 25% of moves) act on win-prob logits in candidate mode, not log-probs, so they
+are softer. Use for v5.1 (next GPU week): one long candidate-mode run from v5 EMA with D7 + D6/D5 +
+DeepMind rows, gated with 400 games vs `models/vibefish_v5_ema.pt@cand`.
+
+### v5 (shipped 2026-11-11) and v4.3 (not shipped): DeepMind's method and data
 
 - **v5** (candidate mode, one pass per legal move): v4.1 + mark embedding + head, 240 min single T4,
   16M DeepMind rows. Candidate head 0.0235 held-out wp lost, flat after 1k steps; policy 0.0206.
-  Lesson: at our compute the per-move pass does not beat the one-pass heads.
+  Held-out said it was worse, but in games it beats v4.1 53.6% over 400 (SF 2000 equal within noise,
+  DeepMind 9M 16.5% vs 14.2%), so **v5 ships**. Lesson: held-out wp lost does not rank candidate mode
+  against one-pass play; trust games, 400 for close calls.
 - **v4.3**: v4.1 + 150 min, the same DeepMind rows on the one-pass action head only. 47.2% vs v4.1,
   SF 2000 64.0%, puzzles 64.9%, **DeepMind 9M 18.5%** (v4.1 14.2%). Helps against DeepMind, not overall.
 - **Next:** a long run, not a short fine-tune (v4.2 and v4.3 both lost to v4.1 after 150 min). Options:
