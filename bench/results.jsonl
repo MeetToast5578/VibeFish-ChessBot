@@ -92,3 +92,4 @@
 {"model": "models/vibefish_v5_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 94, "D": 57, "L": 49, "score": 0.613, "perf_elo": 2080}]}
 {"model": "models/vibefish_v4_1.pt", "mix": 2.0, "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 98, "D": 41, "L": 61, "score": 0.593, "perf_elo": 2065}]}
 {"model": "models/vibefish_v5_1_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "models/vibefish_v5_ema.pt@cand", "movetime": 0.1, "W": 64, "D": 69, "L": 67, "score": 0.492}]}
+{"model": "models/vibefish_v5_1_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "models/vibefish_v5_ema.pt@cand", "movetime": 0.1, "W": 62, "D": 87, "L": 51, "score": 0.527}]}
