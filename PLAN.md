@@ -250,6 +250,14 @@ SF 2000 35.0% (1892; mix 2: 38.3%, 1917). Lesson: data and method, not size, mad
 positions gives ~+20–50 Elo, inside two match-noise bands. Both runs were still improving at the
 end, so at this budget neither size is saturated; the size sweep needs longer runs to find the knee.
 
+### D8 and v5.2 (2026-11-14/16)
+
+D8: v5.1 EMA self-play in candidate mode, depth 12, Kaggle CPU notebooks `vibefish-d8-1..5` (seeds
+190000–194899, puzzle start rows 4.920M–4.930M), 2×400 games each (3.2–5.3 h per 400): 4,000 games,
+305,588 positions (`D8_10`–`D8_19`), own moves lose 0.0231–0.0242 wp. v5.2 (`vibefish-v52`, launched
+2026-11-16 19:38): v5.1 EMA + 540 min candidate mode, same settings as v5.1, mix D8 0.25 / D7 0.15 /
+D6 0.1 / D5 0.05 / D4 0.03 / D3 0.02 / every-move data / 16M DeepMind rows. Gate: 400 games vs v5.1.
+
 ### v5.1: one long run on D7 (shipped 2026-11-14)
 
 v5 EMA + 540 min candidate mode (`vibefish-v51`): D7 0.25, D6 0.15, D5 0.1, D4 0.05, D3 0.03, CB4_0[0-4]
