@@ -263,6 +263,10 @@ held-out candidate head flat (0.0223 → 0.0223). **Not shipped:** vs v5.1 over 
 next gain needs something new, not another round of the same: play-time mirror averaging (free),
 more DeepMind data, or a better value target (HL-Gauss).
 
+**Mirror averaging (2026-11-17), not adopted:** `--mirror` / `path@candm` averages each move's candidate
+logit with the left-right mirrored board when nobody can castle. v5.1 + mirror vs v5.1, 400 games:
+48.5% (+118 =152 −130). No gain: the network already treats mirrored positions consistently.
+
 ### v5.1: one long run on D7 (shipped 2026-11-14)
 
 v5 EMA + 540 min candidate mode (`vibefish-v51`): D7 0.25, D6 0.15, D5 0.1, D4 0.05, D3 0.03, CB4_0[0-4]

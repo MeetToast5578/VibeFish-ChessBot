@@ -12,7 +12,9 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
 - **D8** (v5.1 self-play, candidate mode, depth 12): 4,000 games / 305,588 positions in the outputs of
   Kaggle notebooks `vibefish-d8-1..5` (`D8_10`–`D8_19`). **v5.2** (`vibefish-v52`, v5.1 + 540 min, D8 25%):
   **not shipped**, ties v5.1 (50.4% over 400, SF 2000 62.0% vs 63.5%, DeepMind 9M 17.7%). The
-  self-play loop has flattened; try play-time mirror averaging, more DeepMind data or HL-Gauss next.
+  self-play loop has flattened. Play-time mirror averaging (`--mirror`) tried: 48.5% vs v5.1 over 400,
+  no gain. Remaining ideas: more DeepMind data (dmav-2 is uploaded; convert more files), HL-Gauss value
+  targets, or a bigger compute budget (Kaggle TPU, if its queue ever runs).
 - **Previous: v4.1** = `models/vibefish_v4_1.pt` (copy of `vibefish_v41_ft_ema.pt`), played with
   `--mix 2` (`play.py`'s default). It is v4 (`models/vibefish_v4.pt`, PR #24) fine-tuned for 150 min
   (`vibefish-v41-ft`, lr 5e-5, from v4's EMA) with D5 25%, D4 10%, CB4 20%, every-move data ≥ 50%;
