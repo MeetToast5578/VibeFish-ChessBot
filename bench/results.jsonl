@@ -103,3 +103,4 @@
 {"model": "models/vibefish_v5_2_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "2000", "movetime": 0.1, "W": 98, "D": 52, "L": 50, "score": 0.62, "perf_elo": 2085}]}
 {"model": "models/vibefish_v5_1_ema.pt", "mix": "candm", "strip_history": false, "matches": [{"opp": "models/vibefish_v5_1_ema.pt@cand", "movetime": 0.1, "W": 60, "D": 79, "L": 61, "score": 0.497}]}
 {"model": "models/vibefish_v5_1_ema.pt", "mix": "candm", "strip_history": false, "matches": [{"opp": "models/vibefish_v5_1_ema.pt@cand", "movetime": 0.1, "W": 58, "D": 73, "L": 69, "score": 0.472}]}
+{"model": "models/vibefish_v5_3_ema.pt", "mix": "cand", "strip_history": false, "matches": [{"opp": "models/vibefish_v5_1_ema.pt@cand", "movetime": 0.1, "W": 62, "D": 77, "L": 61, "score": 0.502}]}
