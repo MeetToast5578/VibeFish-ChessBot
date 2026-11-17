@@ -162,3 +162,28 @@ def test_chessbench_action_value_record_parses_to_our_score():
     f, moves, scores = data.parse_av(rec)
     assert f == fen and moves == [] and list(scores) == [mv]
     assert abs(float(teacher.to_grade(scores[mv])) - wp) < 1e-3   # same win-prob curve both ways
+
+
+def test_flip_files_matches_mirrored_board_and_mirror_scores_are_symmetric():
+    from model import flip_files, with_cand
+    for b in random_boards(40, seed=7):
+        b = chess.Board(b.fen())   # history-free, so transform() keeps everything encode() sees
+        if b.castling_rights or b.is_game_over():
+            continue
+        m = b.transform(chess.flip_horizontal)
+        assert (flip_files(encode(b)) == encode(m)).all()
+    torch.manual_seed(0)
+    c = with_cand(ChessGPT(d=32, layers=2, heads=2)).eval()
+    torch.nn.init.normal_(c.cand_emb.weight)
+    b = chess.Board("8/5k2/8/3p4/4P3/8/2K5/8 w - - 0 1")
+    m = b.transform(chess.flip_horizontal)
+    lb, sb = c.scores(b, cand=True, mirror=True)
+    lm, sm = c.scores(m, cand=True, mirror=True)
+    flip = {(i // 64 ^ 7) * 64 + (i % 64 ^ 7): v for i, v in zip(lb, sb.tolist())}
+    for i, v in zip(lm, sm.tolist()):   # mirrored averaging scores a position and its mirror the same
+        assert abs(flip[i] - v) < 1e-5
+
+
+def test_opponent_spec_takes_candm():
+    import evaluate
+    assert evaluate.spec_of("models/a.pt@candm") == ("v2", "models/a.pt", "candm", False)

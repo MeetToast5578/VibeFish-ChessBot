@@ -85,6 +85,16 @@ def encode(board: chess.Board) -> np.ndarray:
     return x
 
 
+def flip_files(x: np.ndarray) -> np.ndarray:
+    """encode() of the same position mirrored left-right (files a<->h), history features kept. Only
+    equivalent chess when nobody can castle (castling is not left-right symmetric)."""
+    y = x.copy()
+    y[:64] = x[np.arange(64) ^ 7]
+    if y[65, 0] < 8:
+        y[65, 0] = 7 - y[65, 0]   # en-passant file
+    return y
+
+
 def block(layer: nn.TransformerEncoderLayer, h, bias=None):
     """layer's pre-norm forward (dropout 0, gelu) with an optional [heads, S, S] additive attention bias."""
     a = layer.self_attn
@@ -155,13 +165,19 @@ class ChessGPT(nn.Module):
         return policy, action, value
 
     @torch.no_grad()
-    def scores(self, board: chess.Board, mix=0.0, cand=False):
+    def scores(self, board: chess.Board, mix=0.0, cand=False, mirror=False):
         """(legal move indices, score per legal move). mix blends in the action-value head. cand: one
-        pass per legal move (that move marked), score = its win-prob logit (DeepMind-style, no lookahead)."""
+        pass per legal move (that move marked), score = its win-prob logit (DeepMind-style, no lookahead).
+        mirror (cand only): when nobody can castle, also score each move on the left-right mirrored
+        board and average the two logits."""
         legal = legal_indices(board)
         if cand:
-            x = torch.from_numpy(encode(board))[None].expand(len(legal), -1, -1)
-            return legal, self(x, torch.tensor(legal))
+            e = encode(board)
+            s = self(torch.from_numpy(e)[None].expand(len(legal), -1, -1), torch.tensor(legal))
+            if mirror and not board.castling_rights:
+                xm = torch.from_numpy(flip_files(e))[None].expand(len(legal), -1, -1)
+                s = (s + self(xm, torch.tensor([(i // 64 ^ 7) * 64 + (i % 64 ^ 7) for i in legal]))) / 2
+            return legal, s
         policy, action, _ = self(torch.from_numpy(encode(board))[None])
         s = F.log_softmax(policy[0, legal], -1)
         if mix:
@@ -169,8 +185,8 @@ class ChessGPT(nn.Module):
         return legal, s
 
     @torch.no_grad()
-    def pick(self, board: chess.Board, temperature=0.0, mix=0.0, cand=False) -> chess.Move:
-        legal, s = self.scores(board, mix, cand)
+    def pick(self, board: chess.Board, temperature=0.0, mix=0.0, cand=False, mirror=False) -> chess.Move:
+        legal, s = self.scores(board, mix, cand, mirror)
         if temperature <= 0:
             i = legal[int(s.argmax())]
         else:

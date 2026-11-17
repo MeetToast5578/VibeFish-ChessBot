@@ -53,8 +53,8 @@ def make_pick(spec):
         return lambda b: eng.play(b, chess.engine.Limit(time=1)).move
     from model import load, without_history
     net = load(path)
-    if mix == "cand":   # candidate mode: one pass per legal move
-        return lambda b: net.pick(without_history(b) if strip else b, cand=True)
+    if mix in ("cand", "candm"):   # candidate mode: one pass per legal move; candm adds mirror averaging
+        return lambda b: net.pick(without_history(b) if strip else b, cand=True, mirror=mix == "candm")
     return lambda b: net.pick(without_history(b) if strip else b, mix=mix)
 
 
@@ -66,7 +66,7 @@ def spec_of(arg):
     if arg.startswith("uci:"):
         return ("uci", arg[4:], None, False)
     path, _, mix = arg.partition("@")
-    return ("v2", path, mix if mix == "cand" else float(mix or 0), False)
+    return ("v2", path, mix if mix in ("cand", "candm") else float(mix or 0), False)
 
 
 def _init(spec, opp=None):
@@ -171,6 +171,7 @@ if __name__ == "__main__":
     p.add_argument("--v1", help="VibeFish v1 dir, e.g. models/v1 (evaluates v1 instead)")
     p.add_argument("--mix", type=float, default=0.0, help="weight of the action-value head in the move choice")
     p.add_argument("--cand", action="store_true", help="candidate mode: one pass per legal move (needs a cand model)")
+    p.add_argument("--mirror", action="store_true", help="with --cand: average with the left-right mirrored board when nobody can castle")
     p.add_argument("--strip-history", action="store_true", help="hide move history from the model")
     p.add_argument("--puzzles", action="store_true")
     p.add_argument("--heldout", action="store_true")
@@ -183,7 +184,7 @@ if __name__ == "__main__":
     p.add_argument("--workers", type=int, default=os.cpu_count())
     p.add_argument("--log", help="append results as JSON here")
     a = p.parse_args()
-    mix = "cand" if a.cand else a.mix
+    mix = ("candm" if a.mirror else "cand") if a.cand else a.mix
     spec = ("v1", a.v1, None, False) if a.v1 else ("v2", a.model, mix, a.strip_history)
     out = {"model": a.v1 or a.model, "mix": mix, "strip_history": a.strip_history}
     opps = [e for e in a.match.split(",") if e] + (["vs"] if a.vs else [])
