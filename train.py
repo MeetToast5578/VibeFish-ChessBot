@@ -15,7 +15,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from model import ChessGPT, save, load, grow, with_cand
+from model import ChessGPT, save, load, grow, with_cand, hl_target, hl_logit
 from data import load_shard
 from teacher import to_grade
 
@@ -45,6 +45,7 @@ p.add_argument("--boost", type=float, default=1.0, help="lr multiplier for --boo
 p.add_argument("--ema", type=float, default=0.999, help="decay of the weight average saved as ema.pt (0 = off)")
 p.add_argument("--opt-state", help="with --init: continue this saved optimizer state (opt.pt of the same model)")
 p.add_argument("--cand", action="store_true", help="train candidate mode (one pass per legal move with it marked)")
+p.add_argument("--cand-hl", action="store_true", help="with --cand: 128-bin HL-Gauss candidate head (DeepMind's best loss)")
 p.add_argument("--cand-pos", type=int, default=256, help="positions per step used for candidate passes")
 p.add_argument("--cand-k", type=int, default=4, help="moves per position: the best plus k-1 random graded ones")
 p.add_argument("--w-cand", type=float, default=1.0, help="weight of the candidate win-prob BCE")
@@ -135,9 +136,15 @@ def cand_losses(model, batch, npos, k, min_known=2):
     valid = kn.gather(1, cols)
     mv = idx[sel].gather(1, cols).clamp(min=0)
     gr = g[sel].gather(1, cols).nan_to_num(0.0)
-    logit = model(x[sel].repeat_interleave(cols.shape[1], 0), mv.flatten()).view(cols.shape).float()
-    bce = F.binary_cross_entropy_with_logits(logit, gr.clamp(0, 1), reduction="none")
-    bce = bce.masked_fill(~valid, 0).sum() / valid.sum().clamp(min=1)
+    xs, mvf = x[sel].repeat_interleave(cols.shape[1], 0), mv.flatten()
+    if args.cand_hl:   # cross-entropy against a Gaussian-smoothed bin target; ranking on the expected win prob
+        bins = model(xs, mvf, bins=True).float().view(*cols.shape, -1)
+        logit = hl_logit(bins)
+        point = -(hl_target(gr.clamp(0, 1)) * F.log_softmax(bins, -1)).sum(-1)
+    else:
+        logit = model(xs, mvf).view(cols.shape).float()
+        point = F.binary_cross_entropy_with_logits(logit, gr.clamp(0, 1), reduction="none")
+    bce = point.masked_fill(~valid, 0).sum() / valid.sum().clamp(min=1)
     target = F.softmax((gr / args.tau).masked_fill(~valid, -1e9), -1)
     rank = -(target * F.log_softmax(logit.masked_fill(~valid, -1e9), -1)).masked_fill(~valid, 0).sum(-1).mean()
     return bce, rank
@@ -225,7 +232,7 @@ def main():
     else:
         model = ChessGPT(args.d, args.layers, args.heads, args.loops, args.attn_bias)
     if args.cand:
-        model = with_cand(model)
+        model = with_cand(model, hl=args.cand_hl)
     model = model.train().to(dev)
     print(f"params: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M  cfg {model.cfg}", flush=True)
     fast_ids = set()
