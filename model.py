@@ -85,6 +85,35 @@ def encode(board: chess.Board) -> np.ndarray:
     return x
 
 
+HL_BINS = 128   # candidate head with cand="hl": win prob as a distribution over 128 equal bins (HL-Gauss)
+
+
+def hl_target(y, bins=HL_BINS, sigma=0.75 / HL_BINS):
+    """HL-Gauss target: a Gaussian (std sigma) around win prob y, integrated over each bin. y: [...] -> [..., bins]."""
+    edges = torch.linspace(0, 1, bins + 1, device=y.device)
+    cdf = 0.5 * (1 + torch.erf((edges - y[..., None]) / (sigma * math.sqrt(2))))
+    p = cdf[..., 1:] - cdf[..., :-1]
+    return p / p.sum(-1, keepdim=True).clamp(min=1e-9)
+
+
+def hl_logit(out):
+    """Bin logits [..., bins] -> logit of the expected win prob, comparable to the scalar candidate head."""
+    bins = out.shape[-1]
+    centers = torch.linspace(0.5 / bins, 1 - 0.5 / bins, bins, device=out.device)
+    p = (F.softmax(out.float(), -1) * centers).sum(-1).clamp(1e-4, 1 - 1e-4)
+    return torch.log(p) - torch.log1p(-p)
+
+
+def flip_files(x: np.ndarray) -> np.ndarray:
+    """encode() of the same position mirrored left-right (files a<->h), history features kept. Only
+    equivalent chess when nobody can castle (castling is not left-right symmetric)."""
+    y = x.copy()
+    y[:64] = x[np.arange(64) ^ 7]
+    if y[65, 0] < 8:
+        y[65, 0] = 7 - y[65, 0]   # en-passant file
+    return y
+
+
 def block(layer: nn.TransformerEncoderLayer, h, bias=None):
     """layer's pre-norm forward (dropout 0, gelu) with an optional [heads, S, S] additive attention bias."""
     a = layer.self_attn
@@ -118,7 +147,7 @@ class ChessGPT(nn.Module):
             # 2 to; zero-init so a model it is added to starts unchanged) and read its win prob
             self.cand_emb = nn.Embedding(3, d)
             nn.init.zeros_(self.cand_emb.weight)
-            self.cand_head = nn.Sequential(nn.Linear(3 * d, d), nn.GELU(), nn.Linear(d, 1))
+            self.cand_head = nn.Sequential(nn.Linear(3 * d, d), nn.GELU(), nn.Linear(d, HL_BINS if cand == "hl" else 1))
         self.d = d
 
     def trunk(self, x, marks=None):
@@ -135,7 +164,7 @@ class ChessGPT(nn.Module):
                 h = block(layer, h, None if self.attn_bias is None else self.attn_bias[i])
         return self.norm(h)
 
-    def forward(self, x, mv=None):
+    def forward(self, x, mv=None, bins=False):
         """x: [B, SEQ, NF] ints -> policy logits [B, 4096], action-value logits [B, 4096], value [B].
         With mv ([B] oriented move indices, candidate mode): win-prob logit [B] of playing that move."""
         if mv is not None:
@@ -145,7 +174,10 @@ class ChessGPT(nn.Module):
             marks = torch.zeros(len(mv), 64, dtype=torch.long, device=mv.device)
             marks[rows, f], marks[rows, t] = 1, 2
             h = self.trunk(x, marks)
-            return self.cand_head(torch.cat([h.mean(1), h[rows, f], h[rows, t]], -1)).squeeze(-1)
+            out = self.cand_head(torch.cat([h.mean(1), h[rows, f], h[rows, t]], -1))
+            if self.cfg["cand"] == "hl":   # bins=True: the raw bin logits, for the HL-Gauss loss
+                return out if bins else hl_logit(out)
+            return out.squeeze(-1)
         h = self.trunk(x)
         s = h[:, :64]
         scale = 1 / math.sqrt(self.d)
@@ -155,13 +187,19 @@ class ChessGPT(nn.Module):
         return policy, action, value
 
     @torch.no_grad()
-    def scores(self, board: chess.Board, mix=0.0, cand=False):
+    def scores(self, board: chess.Board, mix=0.0, cand=False, mirror=False):
         """(legal move indices, score per legal move). mix blends in the action-value head. cand: one
-        pass per legal move (that move marked), score = its win-prob logit (DeepMind-style, no lookahead)."""
+        pass per legal move (that move marked), score = its win-prob logit (DeepMind-style, no lookahead).
+        mirror (cand only): when nobody can castle, also score each move on the left-right mirrored
+        board and average the two logits."""
         legal = legal_indices(board)
         if cand:
-            x = torch.from_numpy(encode(board))[None].expand(len(legal), -1, -1)
-            return legal, self(x, torch.tensor(legal))
+            e = encode(board)
+            s = self(torch.from_numpy(e)[None].expand(len(legal), -1, -1), torch.tensor(legal))
+            if mirror and not board.castling_rights:
+                xm = torch.from_numpy(flip_files(e))[None].expand(len(legal), -1, -1)
+                s = (s + self(xm, torch.tensor([(i // 64 ^ 7) * 64 + (i % 64 ^ 7) for i in legal]))) / 2
+            return legal, s
         policy, action, _ = self(torch.from_numpy(encode(board))[None])
         s = F.log_softmax(policy[0, legal], -1)
         if mix:
@@ -169,8 +207,8 @@ class ChessGPT(nn.Module):
         return legal, s
 
     @torch.no_grad()
-    def pick(self, board: chess.Board, temperature=0.0, mix=0.0, cand=False) -> chess.Move:
-        legal, s = self.scores(board, mix, cand)
+    def pick(self, board: chess.Board, temperature=0.0, mix=0.0, cand=False, mirror=False) -> chess.Move:
+        legal, s = self.scores(board, mix, cand, mirror)
         if temperature <= 0:
             i = legal[int(s.argmax())]
         else:
@@ -196,12 +234,15 @@ def grow(src: ChessGPT, layers, loops=1, bias=False) -> ChessGPT:
     return m
 
 
-def with_cand(src: ChessGPT) -> ChessGPT:
-    """src plus the candidate-mode parts (mark embedding at zero, fresh head); everything else kept."""
-    if src.cfg.get("cand"):
+def with_cand(src: ChessGPT, hl=False) -> ChessGPT:
+    """src plus the candidate-mode parts (mark embedding at zero, fresh head); everything else kept.
+    hl: a 128-bin HL-Gauss head; from a scalar-head candidate model the trained mark embedding is kept."""
+    want = "hl" if hl else True
+    if src.cfg.get("cand") == want or (not hl and src.cfg.get("cand")):
         return src
-    m = ChessGPT(**{**src.cfg, "cand": True})
-    missing, unexpected = m.load_state_dict(src.state_dict(), strict=False)
+    m = ChessGPT(**{**src.cfg, "cand": want})
+    sd = {k: v for k, v in src.state_dict().items() if not (hl and k.startswith("cand_head."))}
+    missing, unexpected = m.load_state_dict(sd, strict=False)
     assert not unexpected and all(k.startswith("cand_") for k in missing), (missing, unexpected)
     return m
 

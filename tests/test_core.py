@@ -1,3 +1,4 @@
+import math
 import json
 import random
 
@@ -162,3 +163,47 @@ def test_chessbench_action_value_record_parses_to_our_score():
     f, moves, scores = data.parse_av(rec)
     assert f == fen and moves == [] and list(scores) == [mv]
     assert abs(float(teacher.to_grade(scores[mv])) - wp) < 1e-3   # same win-prob curve both ways
+
+
+def test_flip_files_matches_mirrored_board_and_mirror_scores_are_symmetric():
+    from model import flip_files, with_cand
+    for b in random_boards(40, seed=7):
+        b = chess.Board(b.fen())   # history-free, so transform() keeps everything encode() sees
+        if b.castling_rights or b.is_game_over():
+            continue
+        m = b.transform(chess.flip_horizontal)
+        assert (flip_files(encode(b)) == encode(m)).all()
+    torch.manual_seed(0)
+    c = with_cand(ChessGPT(d=32, layers=2, heads=2)).eval()
+    torch.nn.init.normal_(c.cand_emb.weight)
+    b = chess.Board("8/5k2/8/3p4/4P3/8/2K5/8 w - - 0 1")
+    m = b.transform(chess.flip_horizontal)
+    lb, sb = c.scores(b, cand=True, mirror=True)
+    lm, sm = c.scores(m, cand=True, mirror=True)
+    flip = {(i // 64 ^ 7) * 64 + (i % 64 ^ 7): v for i, v in zip(lb, sb.tolist())}
+    for i, v in zip(lm, sm.tolist()):   # mirrored averaging scores a position and its mirror the same
+        assert abs(flip[i] - v) < 1e-5
+
+
+def test_opponent_spec_takes_candm():
+    import evaluate
+    assert evaluate.spec_of("models/a.pt@candm") == ("v2", "models/a.pt", "candm", False)
+
+
+def test_hl_gauss_target_and_head():
+    from model import hl_target, hl_logit, with_cand, HL_BINS
+    t = hl_target(torch.tensor([0.0, 0.3, 1.0]))
+    assert t.shape == (3, HL_BINS) and torch.allclose(t.sum(-1), torch.ones(3))
+    assert int(t[1].argmax()) == int(0.3 * HL_BINS)
+    sharp = torch.log(hl_target(torch.tensor([0.7])) + 1e-9)   # bins peaked at 0.7 -> logit(0.7)
+    assert abs(float(hl_logit(sharp)) - math.log(0.7 / 0.3)) < 0.05
+    torch.manual_seed(0)
+    c = with_cand(ChessGPT(d=32, layers=2, heads=2)).eval()
+    torch.nn.init.normal_(c.cand_emb.weight)
+    h = with_cand(c, hl=True).eval()
+    assert h.cfg["cand"] == "hl" and torch.equal(h.cand_emb.weight, c.cand_emb.weight)   # trained marks kept
+    x = torch.from_numpy(encode(chess.Board()))[None]
+    for a, z in zip(c(x), h(x)):   # one-pass outputs unchanged
+        assert torch.allclose(a, z)
+    legal, s = h.scores(chess.Board(), cand=True)
+    assert s.shape == (len(legal),) and h(x.expand(2, -1, -1), torch.tensor(legal[:2]), bins=True).shape == (2, HL_BINS)

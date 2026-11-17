@@ -250,6 +250,27 @@ SF 2000 35.0% (1892; mix 2: 38.3%, 1917). Lesson: data and method, not size, mad
 positions gives ~+20–50 Elo, inside two match-noise bands. Both runs were still improving at the
 end, so at this budget neither size is saturated; the size sweep needs longer runs to find the knee.
 
+### D8 and v5.2 (2026-11-14/16)
+
+D8: v5.1 EMA self-play in candidate mode, depth 12, Kaggle CPU notebooks `vibefish-d8-1..5` (seeds
+190000–194899, puzzle start rows 4.920M–4.930M), 2×400 games each (3.2–5.3 h per 400): 4,000 games,
+305,588 positions (`D8_10`–`D8_19`), own moves lose 0.0231–0.0242 wp. v5.2 (`vibefish-v52`, launched
+2026-11-16 19:38): v5.1 EMA + 540 min candidate mode, same settings as v5.1, mix D8 0.25 / D7 0.15 /
+D6 0.1 / D5 0.05 / D4 0.03 / D3 0.02 / every-move data / 16M DeepMind rows. 28.7k steps, 22M positions;
+held-out candidate head flat (0.0223 → 0.0223). **Not shipped:** vs v5.1 over 400 games 50.4%
+(+129 =145 −126), SF 2000 62.0% (v5.1 63.5%), DeepMind 9M 17.7% (v5.1 16.8%). `models/vibefish_v5_2*.pt`.
+**Lesson:** the self-play + 9 h fine-tune loop has flattened (v5 → v5.1 small, v5.1 → v5.2 none). The
+next gain needs something new, not another round of the same: play-time mirror averaging (free),
+more DeepMind data, or a better value target (HL-Gauss).
+
+**v5.3 (2026-11-17), not shipped:** v5.1 + HL-Gauss candidate head (`--cand-hl`, 128 bins), 540 min,
+same data as v5.2. Held-out 0.0223 (unchanged); vs v5.1 over 400 games 48.6% (+119 =151 −130).
+DeepMind 9M / SF matches skipped once the head-to-head failed. v5.1 remains the plateau.
+
+**Mirror averaging (2026-11-17), not adopted:** `--mirror` / `path@candm` averages each move's candidate
+logit with the left-right mirrored board when nobody can castle. v5.1 + mirror vs v5.1, 400 games:
+48.5% (+118 =152 −130). No gain: the network already treats mirrored positions consistently.
+
 ### v5.1: one long run on D7 (shipped 2026-11-14)
 
 v5 EMA + 540 min candidate mode (`vibefish-v51`): D7 0.25, D6 0.15, D5 0.1, D4 0.05, D3 0.03, CB4_0[0-4]
