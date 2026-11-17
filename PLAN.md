@@ -263,6 +263,10 @@ held-out candidate head flat (0.0223 → 0.0223). **Not shipped:** vs v5.1 over 
 next gain needs something new, not another round of the same: play-time mirror averaging (free),
 more DeepMind data, or a better value target (HL-Gauss).
 
+**v5.3 (2026-11-17), not shipped:** v5.1 + HL-Gauss candidate head (`--cand-hl`, 128 bins), 540 min,
+same data as v5.2. Held-out 0.0223 (unchanged); vs v5.1 over 400 games 48.6% (+119 =151 −130).
+DeepMind 9M / SF matches skipped once the head-to-head failed. v5.1 remains the plateau.
+
 **Mirror averaging (2026-11-17), not adopted:** `--mirror` / `path@candm` averages each move's candidate
 logit with the left-right mirrored board when nobody can castle. v5.1 + mirror vs v5.1, 400 games:
 48.5% (+118 =152 −130). No gain: the network already treats mirrored positions consistently.

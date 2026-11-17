@@ -494,6 +494,21 @@ stayed at 0.0223 win prob lost, and in games it ties v5.1: 50.4% head to head ov
 self-play round has paid less (v4.1: +47 Elo, v5.1: small, v5.2: none): at this model size and compute
 the recipe is close to its limit, and further gains need new ingredients rather than more rounds.
 
+### 4.14 What did not move v5.1
+
+Three ideas after v5.2, each gated over 400 games against v5.1:
+
+| | change | vs v5.1, 400 games |
+|---|---|---|
+| v5.2 | one more self-play round (D8) + 9 h | 50.4% (+129 =145 −126) |
+| mirror averaging | average each move's score with the left-right mirrored board when nobody can castle (play time only) | 48.5% (+118 =152 −130) |
+| v5.3 | DeepMind's HL-Gauss loss: the candidate head predicts win prob as a 128-bin distribution, 9 h | 48.6% (+119 =151 −130) |
+
+None shipped. The held-out candidate head sat at ~0.0223 win prob lost in all three, and the games
+agree: at 13.8M parameters and ~10 GPU-hours per run, v5.1 is where this recipe levels off. What remains
+is mostly scale: more and fresher every-move data (DeepMind's set holds hundreds of millions more
+graded moves), longer runs, or a larger model within the 14M cap.
+
 ## 5. Results summary
 
 All numbers are one forward pass per move. v4 and v4.1 use `mix = 2`. v5 (one pass per legal move) is in §4.11.
