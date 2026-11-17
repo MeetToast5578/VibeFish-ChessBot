@@ -485,6 +485,15 @@ Each gap alone is within noise, but all point the same way, so **v5.1 ships**
 (`models/vibefish_v5_1_ema.pt`). Its 4 wins are the first by a candidate-mode VibeFish against
 DeepMind's 9M.
 
+### 4.13 v5.2: the loop flattens
+
+D8: v5.1 played 4,000 more self-play games in candidate mode (305,588 positions, depth 12). v5.2 is v5.1
+trained 540 min more with D8 at 25% of the mix, the same recipe as v5.1. Its held-out candidate head
+stayed at 0.0223 win prob lost, and in games it ties v5.1: 50.4% head to head over 400 games
+(+129 =145 −126), SF 2000 62.0% (v5.1 63.5%), DeepMind 9M 17.7% (v5.1 16.8%). Not shipped. Each
+self-play round has paid less (v4.1: +47 Elo, v5.1: small, v5.2: none): at this model size and compute
+the recipe is close to its limit, and further gains need new ingredients rather than more rounds.
+
 ## 5. Results summary
 
 All numbers are one forward pass per move. v4 and v4.1 use `mix = 2`. v5 (one pass per legal move) is in §4.11.

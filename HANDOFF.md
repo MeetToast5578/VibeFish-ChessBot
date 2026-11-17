@@ -10,8 +10,9 @@ State of the work when it was paused, and what to do next. Read `CLAUDE.md` and 
   16.8% vs 16.5%. Held-out candidate head 0.0219 (v5 0.0235). GPU used ~9.5 h of this week's 30 h.
 - **Previous: v5** = `models/vibefish_v5_ema.pt` (see the v5 entry below).
 - **D8** (v5.1 self-play, candidate mode, depth 12): 4,000 games / 305,588 positions in the outputs of
-  Kaggle notebooks `vibefish-d8-1..5` (`D8_10`–`D8_19`). **v5.2 training** on Kaggle `vibefish-v52`
-  (launched 2026-11-16 19:38 UTC, 540 min, from v5.1 EMA, D8 25%); gate 400 games vs v5.1.
+  Kaggle notebooks `vibefish-d8-1..5` (`D8_10`–`D8_19`). **v5.2** (`vibefish-v52`, v5.1 + 540 min, D8 25%):
+  **not shipped**, ties v5.1 (50.4% over 400, SF 2000 62.0% vs 63.5%, DeepMind 9M 17.7%). The
+  self-play loop has flattened; try play-time mirror averaging, more DeepMind data or HL-Gauss next.
 - **Previous: v4.1** = `models/vibefish_v4_1.pt` (copy of `vibefish_v41_ft_ema.pt`), played with
   `--mix 2` (`play.py`'s default). It is v4 (`models/vibefish_v4.pt`, PR #24) fine-tuned for 150 min
   (`vibefish-v41-ft`, lr 5e-5, from v4's EMA) with D5 25%, D4 10%, CB4 20%, every-move data ≥ 50%;
